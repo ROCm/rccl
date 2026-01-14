@@ -42,6 +42,7 @@ option(TIMETRACE                               "Enable time-trace during compila
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
 option(QUIET_WARNINGS                          "Supress compiler warnings"                     OFF)
+option(ENABLE_ROCSHMEM                         "Enable rocSHMEM support in RCCL"               OFF)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -65,6 +66,11 @@ include(CheckSymbolExists)
 include(cmake/Dependencies.cmake) # GTest, rocm-cmake, rocm_local_targets
 include(cmake/CheckSymbolExistsNoWarn.cmake)
 
+# Include rocSHMEM build module only if enabled
+if(ENABLE_ROCSHMEM)
+  include(cmake/ROCSHMEM.cmake)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Build only for local GPU architecture
@@ -79,6 +85,9 @@ endif()
 
 # Determine which GPU architectures to build for
 set(GPU_TARGETS "${DEFAULT_GPUS}" CACHE STRING "Target default GPUs if GPU_TARGETS is not defined.")
+
+# ROCM NetIB patch
+include(cmake/rocmIb.cmake)
 
 # Modify GPU architectures for Address Sanitizer builds by appending "xnack+"
 if (BUILD_ADDRESS_SANITIZER)
@@ -348,6 +357,8 @@ if(BUILD_BFD)
   endif()
 endif()
 
+
+
 # Check for --amdgpu-kernarg-preload-count
 check_cxx_compiler_flag("-mllvm --amdgpu-kernarg-preload-count=16" HAVE_KERNARG_PRELOAD)
 if (HAVE_KERNARG_PRELOAD)
@@ -362,6 +373,7 @@ endif()
 ## Disable building MSCCL++ if the build environment is invalid
 ## Currently MSCCL++ is supported only on gfx942 and gfx950, and only on Ubuntu and CentOS
 set(MSCCLPP_SUPPORTED_ARCHS "gfx942" "gfx942:xnack-" "gfx942:xnack+" "gfx950" "gfx950:xnack-" "gfx950:xnack+")
+
 
 # Check if any of the supported architectures are in GPU_TARGETS
 set(ARCH_MATCH_FOUND OFF)
@@ -384,6 +396,20 @@ if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
   set(ENABLE_MSCCLPP OFF)
   message(WARNING "MSCCL++ integration only supported on ROCm 6.2.0 or greater; disabling MSCCL++ build")
 endif()
+
+## Disable WARP_SPEED if the build environment is invalid
+set(WARP_SPEED_SUPPORTED_ARCHS "gfx942" "gfx942:xnack-" "gfx942:xnack+" "gfx950" "gfx950:xnack-" "gfx950:xnack+")
+set(ARCH_MATCH_FOUND OFF)
+foreach(ARCH IN LISTS GPU_TARGETS)
+  if(ARCH IN_LIST WARP_SPEED_SUPPORTED_ARCHS)
+    set(ARCH_MATCH_FOUND ON)
+  endif()
+endforeach()
+if (NOT ARCH_MATCH_FOUND)
+  set(ENABLE_WARP_SPEED OFF)
+  message(WARNING "Can only build WARP_SPEED for supported GPU_TARGETS: ${WARP_SPEED_SUPPORTED_ARCHS}; current GPU_TARGETS: ${GPU_TARGETS}; so disabling WARP_SPEED build")
+endif()
+
 
 # cmake_host_system_information(RESULT HOST_OS_ID QUERY DISTRIB_ID) ## Requires cmake 3.22
 execute_process(
@@ -469,6 +495,7 @@ set(SRC_FILES
   src/bootstrap.cc
   src/channel.cc
   src/collectives.cc
+  src/commDump.cc
   src/debug.cc
   src/enqueue.cc
   src/group.cc
@@ -483,6 +510,7 @@ set(SRC_FILES
   src/device/all_gather.h
   src/device/all_reduce.h
   src/device/alltoall_pivot.h
+  src/device/alltoall_gda.h
   src/device/broadcast.h
   src/device/common.h
   src/device/common_kernel.h
@@ -584,6 +612,9 @@ set(SRC_FILES
   src/include/mlx5/mlx5dvcore.h
   src/include/mlx5/mlx5dvsymbols.h
   src/include/mlx5/mlx5dvwrap.h
+  src/include/ionic/ionicdvcore.h
+  src/include/ionic/ionicdvsymbols.h
+  src/include/ionic/ionicdvwrap.h
   src/include/msccl/msccl_lifecycle.h
   src/include/msccl/msccl_parser.h
   src/include/msccl/msccl_scheduler.h
@@ -660,6 +691,8 @@ set(SRC_FILES
   src/misc/ipcsocket.cc
   src/misc/mlx5dvsymbols.cc
   src/misc/mlx5dvwrap.cc
+  src/misc/ionicdvsymbols.cc
+  src/misc/ionicdvwrap.cc
   src/misc/npkit.cc
 # src/misc/nvmlwrap.cc
   src/misc/nvmlwrap_stub.cc
@@ -707,6 +740,7 @@ set(SRC_FILES
   src/transport/generic.cc
   src/transport/net.cc
   src/transport/net_ib.cc
+  src/transport/net_ib_rocm.cc
   src/transport/net_socket.cc
   src/transport/nvls.cc
   src/transport/p2p.cc
@@ -807,85 +841,6 @@ endforeach()
 # available before compiling the unit tests executable(s)
 add_custom_target(hipify_all DEPENDS ${HIP_SOURCES})
 
-if (BUILD_TESTS)
-  if (ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-
-    set(HIPIFY_SRC_DIR "${PROJECT_BINARY_DIR}/hipify/src")
-    set(REPLACE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/scripts/replace_static.sh")
-    message ("Replacing static functions in ${HIPIFY_SRC_DIR} with ${REPLACE_SCRIPT} for unit tests")
-    # Create a list of files which needs to be modified to remove static
-    set(TEST_NONSTATIC_SOURCE_FILES
-      ${HIPIFY_SRC_DIR}/misc/alt_rsmi.cc
-      ${HIPIFY_SRC_DIR}/register/coll_reg.cc
-      ${HIPIFY_SRC_DIR}/transport/shm.cc
-      ${HIPIFY_SRC_DIR}/transport/p2p.cc
-    )
-
-    set(EXCLUDE_STATIC_FILE "${CMAKE_SOURCE_DIR}/tools/scripts/exclude_static_list.txt")
-    # Read the exclude list file into a CMake variable
-    file(READ "${EXCLUDE_STATIC_FILE}" EXCLUDE_STATIC_CONTENTS)
-    string(REPLACE "\n" ";" EXCLUDE_STATIC_LINES "${EXCLUDE_STATIC_CONTENTS}")
-    # Create a mapping from full/relative filename to exclude list
-    unset(EXCLUDE_MAP)
-    foreach(line ${EXCLUDE_STATIC_LINES})
-      if(line MATCHES "^([a-zA-Z0-9_./-]+):([a-zA-Z0-9_,]*)")
-        set(fname "${CMAKE_MATCH_1}")
-        set(exlist "${CMAKE_MATCH_2}")
-        # Map both the basename and the full/relative path for flexibility
-        get_filename_component(basename "${fname}" NAME)
-        set(EXCLUDE_MAP_${fname} "${exlist}")
-        set(EXCLUDE_MAP_${basename} "${exlist}")
-      endif()
-    endforeach()
-
-    # Now, for each file, get the exclude list and pass to the script
-    # Create a custom command to backup the original files and remove static
-    # Always run replace script on hipified files, but preserve original backups
-    foreach(srcfile ${TEST_NONSTATIC_SOURCE_FILES})
-      # Try to match using the full/relative path first, then fallback to basename
-      set(exclude_list "")
-      if(DEFINED EXCLUDE_MAP_${srcfile})
-        set(exclude_list "${EXCLUDE_MAP_${srcfile}}")
-      else()
-        get_filename_component(basename "${srcfile}" NAME)
-        if(DEFINED EXCLUDE_MAP_${basename})
-          set(exclude_list "${EXCLUDE_MAP_${basename}}")
-        endif()
-      endif()
-      add_custom_command(
-        OUTPUT "${srcfile}.staticbak"
-        COMMAND bash -c "\
-            ${CMAKE_COMMAND} -E echo 'Processing ${srcfile} for static replacement' && \
-            if [ ! -f '${srcfile}.staticbak' ]; then \
-              ${CMAKE_COMMAND} -E copy '${srcfile}' '${srcfile}.staticbak' && \
-              ${CMAKE_COMMAND} -E echo 'Created backup: ${srcfile}.staticbak'; \
-            fi && \
-            ${CMAKE_COMMAND} -E echo 'Exposing internal functions/variables in ${srcfile}' && \
-            ${REPLACE_SCRIPT} ${srcfile} --replace-vars --exclude-list=${exclude_list} 2>&1 \
-          "
-        DEPENDS "${srcfile}" "${REPLACE_SCRIPT}" hipify_all
-        COMMENT "Removing static from ${srcfile} (backup preserved at ${srcfile}.staticbak)"
-        VERBATIM
-      )
-      list(APPEND STATIC_BAK_FILES "${srcfile}.staticbak")
-    endforeach()
-    add_custom_target(replace_static_in_hipify ALL DEPENDS ${STATIC_BAK_FILES})
-    add_dependencies(replace_static_in_hipify hipify_all)
-  else()
-    # Restore originals in the build directory if backup exists
-    foreach(srcfile ${HIPIFY_SRC_FILES})
-      if(EXISTS "${srcfile}.staticbak")
-        execute_process(
-          COMMAND ${CMAKE_COMMAND} -E copy "${srcfile}.staticbak" "${srcfile}"
-        )
-        execute_process(
-          COMMAND ${CMAKE_COMMAND} -E remove "${srcfile}.staticbak"
-        )
-      endif()
-    endforeach()
-  endif()
-endif()
-
 # Generate device/host tables and all the collective functions that are going to be in librccl.so
 #==================================================================================================
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -959,11 +914,6 @@ add_library(rccl ${HIP_SOURCES})
 ## Ensure git version is updated before building rccl
 add_dependencies(rccl update_git_version)
 
-if (BUILD_TESTS AND ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
-  ## Set static replacement dependency for fixture unit tests
-  add_dependencies(rccl replace_static_in_hipify)
-endif()
-
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # for hipfied headers
@@ -971,6 +921,7 @@ target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/mlx5)
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/ionic)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include/plugin)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/gensrc)
 target_include_directories(rccl PRIVATE ${HSA_INCLUDE_PATH})
@@ -982,6 +933,7 @@ endif()
 if(ROCTX_ENABLE)
   target_include_directories(rccl PRIVATE ${ROCTRACER_INCLUDE_DIR})
 endif()
+
 
 ## Set RCCL compile definitions
 if(COLLTRACE)
@@ -1003,6 +955,31 @@ else()
   if(HAVE_ROCM_SMI_THREAD_ONLY_MUTEX)
     target_compile_definitions(rccl PRIVATE USE_ROCM_SMI_THREAD_ONLY_MUTEX)
   endif()
+endif()
+if(ENABLE_WARP_SPEED)
+  target_compile_definitions(rccl PRIVATE ENABLE_WARP_SPEED)
+endif()
+if(ENABLE_ROCSHMEM)
+  target_compile_definitions(rccl PRIVATE ENABLE_ROCSHMEM)
+endif()
+
+# ==== rocSHMEM integration (optional) ====
+
+if (ENABLE_ROCSHMEM)
+  add_rocshmem_targets()
+  # Ensure rocSHMEM is fully built/installed before compiling rccl
+  if (TARGET rocshmem_ext)
+    add_dependencies(rccl rocshmem_ext)
+  endif()
+
+  if (ROCSHMEM_INCLUDE_DIR)
+    target_include_directories(rccl PRIVATE ${ROCSHMEM_INCLUDE_DIR})
+  endif()
+
+  # Moved to where MSCCL target_links
+  ## target_link_libraries(rccl PRIVATE ${ROCSHMEM_LIBRARY})
+  target_link_libraries(rccl PRIVATE ${IBVERBS})
+
 endif()
 
 # NPKit flags
@@ -1229,8 +1206,7 @@ if(ENABLE_CODE_COVERAGE)
   message(STATUS "Code coverage is enabled with build type '${CMAKE_BUILD_TYPE}'.")
 
   target_compile_options(rccl PRIVATE
-    -fvisibility=default -Xarch_host -fprofile-instr-generate
-    -Xarch_host -fcoverage-mapping)
+    -fvisibility=default -Xarch_host -fprofile-instr-generate -Xarch_host -fcoverage-mapping)
 
   set(COVERAGE_SHARED_LINKER_FLAGS
     -fprofile-generate
@@ -1335,6 +1311,10 @@ target_link_libraries(rccl PRIVATE   ${SMI_LIBRARIES})
 target_link_libraries(rccl PRIVATE fmt::fmt-header-only)
 if(ENABLE_MSCCLPP)
   target_link_libraries(rccl PRIVATE mscclpp_nccl)
+endif()
+if(ENABLE_ROCSHMEM)
+  target_link_libraries(rccl PRIVATE ${ROCSHMEM_LIBRARY})
+  target_link_libraries(rccl PRIVATE ${IBVERBS})
 endif()
 
 ## Set RCCL link options

@@ -3,8 +3,8 @@
  *
  * See LICENSE.txt for license information
  ************************************************************************/
-
 #include "net.h"
+#include "common/ProcessIsolatedTestRunner.hpp"
 #include "gtest/gtest.h"
 #include <atomic>
 #include <cstring>
@@ -612,6 +612,169 @@ protected:
     return static_cast<int>(result);
   }
 
+  void RunConcurrentOperationsTaskCreationWithEnvVars() {
+    INFO(NCCL_LOG_INFO, "Checking socket configuration environment variables");
+
+    // Check if the required environment variables are set
+    const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
+    const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
+
+    if (!nThreadsEnv || !nSocksPerThreadEnv) {
+      GTEST_SKIP() << "SKIPPING TEST: Required environment variables not set. "
+                  << "Please set the following environment variables to run this test: "
+                  << "export NCCL_SOCKET_NTHREADS=1 and export NCCL_NSOCKS_PERTHREAD=2. "
+                  << "This ensures nSocks > 0 so that ncclNetSocketGetTask gets called. "
+                  << "Environment variables NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be set";
+      return;
+    }
+
+    int nThreads = ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
+    int nSocksPerThread = ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
+
+    // Additional validation for reasonable upper bounds
+    const int MAX_THREADS = 16;
+    const int MAX_SOCKS_PER_THREAD = 64;
+    const int MAX_TOTAL_SOCKETS = 64;
+
+    if (nThreads > MAX_THREADS) {
+      GTEST_SKIP() << "SKIPPING TEST: NCCL_SOCKET_NTHREADS=" << nThreads << " exceeds maximum " << MAX_THREADS << ". "
+                  << "Please provide a reasonable value (e.g., NCCL_SOCKET_NTHREADS=8). "
+                  << "Values too large may cause resource exhaustion.";
+      return;
+    }
+
+    if (nSocksPerThread > MAX_SOCKS_PER_THREAD) {
+      GTEST_SKIP() << "SKIPPING TEST: NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread << " exceeds maximum " << MAX_SOCKS_PER_THREAD << ". "
+                  << "Please provide a reasonable value (e.g., NCCL_NSOCKS_PERTHREAD=4). "
+                  << "Values too large may cause resource exhaustion.";
+      return;
+    }
+
+    // Check for potential overflow before multiplication
+    if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
+      GTEST_SKIP() << "SKIPPING TEST: Configuration would cause integer overflow. "
+                  << "NCCL_SOCKET_NTHREADS=" << nThreads << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
+                  << " exceeds maximum integer value. Please use smaller values.";
+      return;
+    }
+
+    int totalSockets = nThreads * nSocksPerThread;
+
+    INFO(NCCL_LOG_INFO, "Environment configuration found:");
+    INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
+    INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
+    INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
+
+    // Validate total sockets count
+    if (totalSockets <= 0) {
+      GTEST_SKIP() << "SKIPPING TEST: Invalid configuration - total sockets must be > 0. "
+                  << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
+                  << " = " << totalSockets << ". "
+                  << "Both NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be positive integers. "
+                  << "Example: export NCCL_SOCKET_NTHREADS=2 && export NCCL_NSOCKS_PERTHREAD=2";
+      return;
+    }
+
+    if (totalSockets > MAX_TOTAL_SOCKETS) {
+      GTEST_SKIP() << "SKIPPING TEST: Total sockets " << totalSockets << " exceeds maximum " << MAX_TOTAL_SOCKETS << ". "
+                  << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
+                  << " = " << totalSockets << ". "
+                  << "Please reduce either NCCL_SOCKET_NTHREADS or NCCL_NSOCKS_PERTHREAD. "
+                  << "Example: export NCCL_SOCKET_NTHREADS=8 && export NCCL_NSOCKS_PERTHREAD=4";
+      return;
+    }
+
+    if (totalSockets > NCCL_NET_MAX_REQUESTS) {
+      GTEST_SKIP() << "SKIPPING TEST: Total sockets " << totalSockets << " exceeds NCCL_NET_MAX_REQUESTS=" << NCCL_NET_MAX_REQUESTS << ". "
+                  << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
+                  << " = " << totalSockets << ". "
+                  << "NCCL network layer can handle at most " << NCCL_NET_MAX_REQUESTS << " concurrent requests. "
+                  << "Please reduce configuration to stay within NCCL limits.";
+      return;
+    }
+
+    INFO(NCCL_LOG_INFO, "Configuration valid - proceeding with test to exercise "
+                        "ncclNetSocketGetTask");
+
+    // Test socket properties
+    TestSocketProperties();
+
+    char handle[NCCL_NET_HANDLE_MAXSIZE];
+    void *listenComm = nullptr;
+
+    ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+    ASSERT_EQ(result, ncclSuccess) << "Failed to establish listening socket for test execution. "
+                                  << "ncclNetSocket.listen() returned error code: " << result
+                                  << ". Verify network device availability and port accessibility.";
+
+    INFO(NCCL_LOG_INFO, "Testing task creation functionality - ensuring "
+                        "ncclNetSocketGetTask is called");
+
+    std::vector<void *> sendComms;
+    std::vector<void *> recvComms;
+
+    // Establish connection
+    void *sendComm = nullptr;
+    void *recvComm = nullptr;
+    bool connectionSuccess =
+        EstablishConnectionPair(handle, listenComm, sendComm, recvComm);
+
+    if (connectionSuccess) {
+      sendComms.push_back(sendComm);
+      recvComms.push_back(recvComm);
+
+      // Test with buffer sizes that will trigger task subdivision
+      std::vector<size_t> testSizes = GetTestSizes();
+
+      for (size_t testSize : testSizes) {
+        INFO(NCCL_LOG_INFO,
+            "\n=== Testing with buffer size: %zu bytes ===", testSize);
+        INFO(NCCL_LOG_INFO, "This should trigger ncclNetSocketGetTask to create "
+                            "task subdivision");
+
+        std::vector<void *> sendMhandles;
+        std::vector<void *> recvMhandles;
+        std::vector<void *> sendRequests;
+        std::vector<void *> recvRequests;
+        std::vector<std::vector<char>> sendBuffers;
+        std::vector<std::vector<char>> recvBuffers;
+
+        // Setup operations for this test size
+        bool setupSuccess = SetupOperationsForSize(
+            sendComm, recvComm, testSize, sendBuffers, recvBuffers, sendMhandles,
+            recvMhandles, sendRequests, recvRequests, 0xAB);
+
+        if (setupSuccess) {
+          // Progress operations with context about environment variables
+          ProgressOperations(sendRequests[0], recvRequests[0], testSize,
+                            " (with nSocks > 0 from environment variables)");
+        } else {
+          INFO(NCCL_LOG_INFO,
+              "No operations started - skipping progress testing for size %zu",
+              testSize);
+        }
+
+        // Deregister memory
+        DeregisterMemory(sendComm, recvComm, sendMhandles, recvMhandles,
+                        testSize);
+
+        INFO(NCCL_LOG_INFO,
+            "=== Completed testing for buffer size: %zu bytes ===", testSize);
+      }
+
+      INFO(NCCL_LOG_INFO, "\n*** TEST SUCCESS: ncclNetSocketGetTask was "
+                          "successfully exercised! ***");
+    } else {
+      INFO(NCCL_LOG_INFO, "No connections established - test passed (network may "
+                          "not be available)");
+    }
+
+    // Cleanup
+    CleanupCommunicators(sendComms, recvComms, listenComm);
+    INFO(NCCL_LOG_INFO,
+        "TestConcurrentOperationsTaskCreation completed successfully");
+  }
+
 };
 
 // Test concurrent operations task creation in default configuration (without
@@ -709,166 +872,19 @@ TEST_F(NetSocketTests, TestConcurrentOperationsTaskCreationDefault) {
 
 // Test multiple concurrent operations to stress test task creation
 TEST_F(NetSocketTests, TestConcurrentOperationsTaskCreation) {
-  INFO(NCCL_LOG_INFO, "Checking socket configuration environment variables");
+  ProcessIsolatedTestRunner::ExecutionOptions options;
+  options.stopOnFirstFailure = false; // Continue running all tests
+  options.verboseLogging = true;
 
-  // Check if the required environment variables are set
-  const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
-  const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
-
-  if (!nThreadsEnv || !nSocksPerThreadEnv) {
-    GTEST_SKIP() << "SKIPPING TEST: Required environment variables not set. "
-                 << "Please set the following environment variables to run this test: "
-                 << "export NCCL_SOCKET_NTHREADS=1 and export NCCL_NSOCKS_PERTHREAD=2. "
-                 << "This ensures nSocks > 0 so that ncclNetSocketGetTask gets called. "
-                 << "Environment variables NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be set";
-    return;
-  }
-
-  int nThreads = ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
-  int nSocksPerThread = ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
-
-  // Additional validation for reasonable upper bounds
-  const int MAX_THREADS = 16;
-  const int MAX_SOCKS_PER_THREAD = 64;
-  const int MAX_TOTAL_SOCKETS = 64;
-
-  if (nThreads > MAX_THREADS) {
-    GTEST_SKIP() << "SKIPPING TEST: NCCL_SOCKET_NTHREADS=" << nThreads << " exceeds maximum " << MAX_THREADS << ". "
-                 << "Please provide a reasonable value (e.g., NCCL_SOCKET_NTHREADS=8). "
-                 << "Values too large may cause resource exhaustion.";
-    return;
-  }
-
-  if (nSocksPerThread > MAX_SOCKS_PER_THREAD) {
-    GTEST_SKIP() << "SKIPPING TEST: NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread << " exceeds maximum " << MAX_SOCKS_PER_THREAD << ". "
-                 << "Please provide a reasonable value (e.g., NCCL_NSOCKS_PERTHREAD=4). "
-                 << "Values too large may cause resource exhaustion.";
-    return;
-  }
-
-  // Check for potential overflow before multiplication
-  if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
-    GTEST_SKIP() << "SKIPPING TEST: Configuration would cause integer overflow. "
-                 << "NCCL_SOCKET_NTHREADS=" << nThreads << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
-                 << " exceeds maximum integer value. Please use smaller values.";
-    return;
-  }
-
-  int totalSockets = nThreads * nSocksPerThread;
-
-  INFO(NCCL_LOG_INFO, "Environment configuration found:");
-  INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
-  INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
-  INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
-
-  // Validate total sockets count
-  if (totalSockets <= 0) {
-    GTEST_SKIP() << "SKIPPING TEST: Invalid configuration - total sockets must be > 0. "
-                 << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
-                 << " = " << totalSockets << ". "
-                 << "Both NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be positive integers. "
-                 << "Example: export NCCL_SOCKET_NTHREADS=2 && export NCCL_NSOCKS_PERTHREAD=2";
-    return;
-  }
-
-  if (totalSockets > MAX_TOTAL_SOCKETS) {
-    GTEST_SKIP() << "SKIPPING TEST: Total sockets " << totalSockets << " exceeds maximum " << MAX_TOTAL_SOCKETS << ". "
-                 << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
-                 << " = " << totalSockets << ". "
-                 << "Please reduce either NCCL_SOCKET_NTHREADS or NCCL_NSOCKS_PERTHREAD. "
-                 << "Example: export NCCL_SOCKET_NTHREADS=8 && export NCCL_NSOCKS_PERTHREAD=4";
-    return;
-  }
-
-  if (totalSockets > NCCL_NET_MAX_REQUESTS) {
-    GTEST_SKIP() << "SKIPPING TEST: Total sockets " << totalSockets << " exceeds NCCL_NET_MAX_REQUESTS=" << NCCL_NET_MAX_REQUESTS << ". "
-                 << "Current configuration: nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread
-                 << " = " << totalSockets << ". "
-                 << "NCCL network layer can handle at most " << NCCL_NET_MAX_REQUESTS << " concurrent requests. "
-                 << "Please reduce configuration to stay within NCCL limits.";
-    return;
-  }
-
-  INFO(NCCL_LOG_INFO, "Configuration valid - proceeding with test to exercise "
-                      "ncclNetSocketGetTask");
-
-  // Test socket properties
-  TestSocketProperties();
-
-  char handle[NCCL_NET_HANDLE_MAXSIZE];
-  void *listenComm = nullptr;
-
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
-  ASSERT_EQ(result, ncclSuccess) << "Failed to establish listening socket for test execution. "
-                                << "ncclNetSocket.listen() returned error code: " << result
-                                << ". Verify network device availability and port accessibility.";
-
-  INFO(NCCL_LOG_INFO, "Testing task creation functionality - ensuring "
-                      "ncclNetSocketGetTask is called");
-
-  std::vector<void *> sendComms;
-  std::vector<void *> recvComms;
-
-  // Establish connection
-  void *sendComm = nullptr;
-  void *recvComm = nullptr;
-  bool connectionSuccess =
-      EstablishConnectionPair(handle, listenComm, sendComm, recvComm);
-
-  if (connectionSuccess) {
-    sendComms.push_back(sendComm);
-    recvComms.push_back(recvComm);
-
-    // Test with buffer sizes that will trigger task subdivision
-    std::vector<size_t> testSizes = GetTestSizes();
-
-    for (size_t testSize : testSizes) {
-      INFO(NCCL_LOG_INFO,
-           "\n=== Testing with buffer size: %zu bytes ===", testSize);
-      INFO(NCCL_LOG_INFO, "This should trigger ncclNetSocketGetTask to create "
-                          "task subdivision");
-
-      std::vector<void *> sendMhandles;
-      std::vector<void *> recvMhandles;
-      std::vector<void *> sendRequests;
-      std::vector<void *> recvRequests;
-      std::vector<std::vector<char>> sendBuffers;
-      std::vector<std::vector<char>> recvBuffers;
-
-      // Setup operations for this test size
-      bool setupSuccess = SetupOperationsForSize(
-          sendComm, recvComm, testSize, sendBuffers, recvBuffers, sendMhandles,
-          recvMhandles, sendRequests, recvRequests, 0xAB);
-
-      if (setupSuccess) {
-        // Progress operations with context about environment variables
-        ProgressOperations(sendRequests[0], recvRequests[0], testSize,
-                           " (with nSocks > 0 from environment variables)");
-      } else {
-        INFO(NCCL_LOG_INFO,
-             "No operations started - skipping progress testing for size %zu",
-             testSize);
-      }
-
-      // Deregister memory
-      DeregisterMemory(sendComm, recvComm, sendMhandles, recvMhandles,
-                       testSize);
-
-      INFO(NCCL_LOG_INFO,
-           "=== Completed testing for buffer size: %zu bytes ===", testSize);
-    }
-
-    INFO(NCCL_LOG_INFO, "\n*** TEST SUCCESS: ncclNetSocketGetTask was "
-                        "successfully exercised! ***");
-  } else {
-    INFO(NCCL_LOG_INFO, "No connections established - test passed (network may "
-                        "not be available)");
-  }
-
-  // Cleanup
-  CleanupCommunicators(sendComms, recvComms, listenComm);
-  INFO(NCCL_LOG_INFO,
-       "TestConcurrentOperationsTaskCreation completed successfully");
+  RUN_ISOLATED_TESTS_WITH_OPTIONS(options,
+    ProcessIsolatedTestRunner::TestConfig(
+        "TestConcurrentOperationsTaskCreation",
+        [this]() { RunConcurrentOperationsTaskCreationWithEnvVars(); })
+        .withEnvironment({{"NCCL_SOCKET_NTHREADS", "1"},
+                          {"NCCL_NSOCKS_PERTHREAD", "2"},
+                          {"NCCL_DEBUG", "TRACE"},
+                          {"NCCL_DEBUG_SUBSYS", "ALL"}})
+  );
 }
 
 // Test for invalid device index in listen function
@@ -1079,158 +1095,239 @@ TEST_F(NetSocketTests, TestNonHostMemoryRegMr) {
 
 // Test for excessive thread configuration warning
 TEST_F(NetSocketTests, TestExcessiveThreadConfig) {
-  INFO(NCCL_LOG_INFO, "Testing excessive thread configuration warning");
+  ProcessIsolatedTestRunner::ExecutionOptions options;
+  options.stopOnFirstFailure = false; // Continue running all tests
+  options.verboseLogging = true;
 
-  // Check if the required environment variables are set
-  const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
-  const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
+  RUN_ISOLATED_TESTS_WITH_OPTIONS(options,
+    ProcessIsolatedTestRunner::TestConfig(
+        "TestExcessiveThreadConfig",
+        [this]() {
+            INFO(NCCL_LOG_INFO,
+                 "Testing excessive thread configuration warning");
 
-  if (!nThreadsEnv || !nSocksPerThreadEnv) {
-    GTEST_SKIP() << "SKIPPING TEST: Required environment variables not set. "
-                 << "This test requires NCCL_SOCKET_NTHREADS > NCCL_NET_MAX_REQUESTS (" << NCCL_NET_MAX_REQUESTS << ") and NCCL_NSOCKS_PERTHREAD = 1 to trigger warning. "
-                 << "Environment variables NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be set";
-    return;
-  }
+            // Check if the required environment variables are set
+            const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
+            const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
 
-  // Parse with validation - both must be positive
-  int nThreads = ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
-  int nSocksPerThread = ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
+            if (!nThreadsEnv || !nSocksPerThreadEnv) {
+              GTEST_SKIP()
+                  << "SKIPPING TEST: Required environment variables not set. "
+                  << "This test requires NCCL_SOCKET_NTHREADS > "
+                     "NCCL_NET_MAX_REQUESTS ("
+                  << NCCL_NET_MAX_REQUESTS
+                  << ") and NCCL_NSOCKS_PERTHREAD = 1 to trigger warning. "
+                  << "Environment variables NCCL_SOCKET_NTHREADS and "
+                     "NCCL_NSOCKS_PERTHREAD must be set";
+              return;
+            }
 
-  // Check for potential overflow before multiplication
-  if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
-    GTEST_SKIP() << "SKIPPING TEST: Configuration would cause integer overflow. "
-                 << "NCCL_SOCKET_NTHREADS=" << nThreads << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
-                 << " exceeds maximum integer value. Please use smaller values.";
-    return;
-  }
+            // Parse with validation - both must be positive
+            int nThreads =
+                ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
+            int nSocksPerThread =
+                ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
 
-  int totalSockets = nThreads * nSocksPerThread;
+            // Check for potential overflow before multiplication
+            if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
+              GTEST_SKIP() << "SKIPPING TEST: Configuration would cause "
+                              "integer overflow. "
+                           << "NCCL_SOCKET_NTHREADS=" << nThreads
+                           << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
+                           << " exceeds maximum integer value. Please use "
+                              "smaller values.";
+              return;
+            }
 
-  INFO(NCCL_LOG_INFO, "Environment configuration found:");
-  INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
-  INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
-  INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
+            int totalSockets = nThreads * nSocksPerThread;
 
-  // Check if configuration is set to trigger the excessive threads warning
-  // Use NCCL_NET_MAX_REQUESTS instead of arbitrary MAX_THREADS
-  if (nThreads <= NCCL_NET_MAX_REQUESTS) {
-    GTEST_SKIP() << "SKIPPING TEST: NCCL_SOCKET_NTHREADS must be > " << NCCL_NET_MAX_REQUESTS << " to test excessive thread warning. "
-                 << "Current NCCL_SOCKET_NTHREADS=" << nThreads << ". "
-                 << "Please set: export NCCL_SOCKET_NTHREADS=" << (NCCL_NET_MAX_REQUESTS + 1) << ". "
-                 << "NCCL_SOCKET_NTHREADS must be > NCCL_NET_MAX_REQUESTS (" << NCCL_NET_MAX_REQUESTS << ") to trigger warning";
-    return;
-  }
+            INFO(NCCL_LOG_INFO, "Environment configuration found:");
+            INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
+            INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
+            INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
 
-  if (totalSockets > NCCL_NET_MAX_REQUESTS * 10) {  // Allow 10x for testing excessive config
-    GTEST_SKIP() << "SKIPPING TEST: Total sockets=" << totalSockets << " is unreasonably large (> " << (NCCL_NET_MAX_REQUESTS * 10) << "). "
-                 << "Please use more reasonable values for testing. NCCL_NET_MAX_REQUESTS=" << NCCL_NET_MAX_REQUESTS << ". "
-                 << "Example: export NCCL_SOCKET_NTHREADS=" << (NCCL_NET_MAX_REQUESTS + 1) << " && export NCCL_NSOCKS_PERTHREAD=1";
-    return;
-  }
+            // Check if configuration is set to trigger the excessive threads
+            // warning Use NCCL_NET_MAX_REQUESTS instead of arbitrary
+            // MAX_THREADS
+            if (nThreads <= NCCL_NET_MAX_REQUESTS) {
+              GTEST_SKIP()
+                  << "SKIPPING TEST: NCCL_SOCKET_NTHREADS must be > "
+                  << NCCL_NET_MAX_REQUESTS
+                  << " to test excessive thread warning. "
+                  << "Current NCCL_SOCKET_NTHREADS=" << nThreads << ". "
+                  << "Please set: export NCCL_SOCKET_NTHREADS="
+                  << (NCCL_NET_MAX_REQUESTS + 1) << ". "
+                  << "NCCL_SOCKET_NTHREADS must be > NCCL_NET_MAX_REQUESTS ("
+                  << NCCL_NET_MAX_REQUESTS << ") to trigger warning";
+              return;
+            }
 
-  INFO(NCCL_LOG_INFO,
-       "Configuration valid for testing excessive threads warning");
-  INFO(NCCL_LOG_INFO, "NCCL_SOCKET_NTHREADS=%d > NCCL_NET_MAX_REQUESTS=%d", nThreads, NCCL_NET_MAX_REQUESTS);
+            if (totalSockets >
+                NCCL_NET_MAX_REQUESTS *
+                    10) { // Allow 10x for testing excessive config
+              GTEST_SKIP() << "SKIPPING TEST: Total sockets=" << totalSockets
+                           << " is unreasonably large (> "
+                           << (NCCL_NET_MAX_REQUESTS * 10) << "). "
+                           << "Please use more reasonable values for testing. "
+                              "NCCL_NET_MAX_REQUESTS="
+                           << NCCL_NET_MAX_REQUESTS << ". "
+                           << "Example: export NCCL_SOCKET_NTHREADS="
+                           << (NCCL_NET_MAX_REQUESTS + 1)
+                           << " && export NCCL_NSOCKS_PERTHREAD=1";
+              return;
+            }
 
-  // Test socket properties
-  TestSocketProperties();
+            INFO(NCCL_LOG_INFO,
+                 "Configuration valid for testing excessive threads warning");
+            INFO(NCCL_LOG_INFO,
+                 "NCCL_SOCKET_NTHREADS=%d > NCCL_NET_MAX_REQUESTS=%d", nThreads,
+                 NCCL_NET_MAX_REQUESTS);
 
-  // Initialize to trigger the warning logic
-  char handle[NCCL_NET_HANDLE_MAXSIZE];
-  void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+            // Test socket properties
+            TestSocketProperties();
 
-  if (result == ncclSuccess && listenComm) {
-    // The implementation should have limited the threads to NCCL_NET_MAX_REQUESTS
-    // internally
-    INFO(NCCL_LOG_INFO,
-         "*** SUCCESS: Listen succeeded with excessive NCCL_SOCKET_NTHREADS - "
-         "limits enforced internally ***");
-    ncclNetSocket.closeListen(listenComm);
-  } else {
-    INFO(NCCL_LOG_INFO, "Listen failed with result: %d", result);
-  }
+            // Initialize to trigger the warning logic
+            char handle[NCCL_NET_HANDLE_MAXSIZE];
+            void *listenComm = nullptr;
+            ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
 
-  INFO(NCCL_LOG_INFO, "TestExcessiveThreadConfig completed");
+            if (result == ncclSuccess && listenComm) {
+              // The implementation should have limited the threads to
+              // NCCL_NET_MAX_REQUESTS internally
+              INFO(NCCL_LOG_INFO, "*** SUCCESS: Listen succeeded with "
+                                  "excessive NCCL_SOCKET_NTHREADS - "
+                                  "limits enforced internally ***");
+              ncclNetSocket.closeListen(listenComm);
+            } else {
+              INFO(NCCL_LOG_INFO, "Listen failed with result: %d", result);
+            }
+
+            INFO(NCCL_LOG_INFO, "TestExcessiveThreadConfig completed");
+        })
+        .withEnvironment({{"NCCL_SOCKET_NTHREADS", "33"},
+                          {"NCCL_NSOCKS_PERTHREAD", "1"},
+                          {"NCCL_DEBUG", "TRACE"},
+                          {"NCCL_DEBUG_SUBSYS", "ALL"}})
+  );
 }
 
 // Test for excessive socket configuration warning
 TEST_F(NetSocketTests, TestExcessiveSocketConfig) {
-  INFO(NCCL_LOG_INFO, "Testing excessive socket configuration warning");
+  ProcessIsolatedTestRunner::ExecutionOptions options;
+  options.stopOnFirstFailure = false; // Continue running all tests
+  options.verboseLogging = true;
 
-  // Check if the required environment variables are set
-  const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
-  const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
+  RUN_ISOLATED_TESTS_WITH_OPTIONS(options,
+    ProcessIsolatedTestRunner::TestConfig(
+        "TestExcessiveThreadConfig",
+        [this]() {
+            INFO(NCCL_LOG_INFO,
+                 "Testing excessive socket configuration warning");
 
-  if (!nThreadsEnv || !nSocksPerThreadEnv) {
-    GTEST_SKIP() << "SKIPPING TEST: Required environment variables not set. "
-                 << "This test requires total sockets (nThreads * nSocksPerThread) > MAX_SOCKETS (64). "
-                 << "Environment variables NCCL_SOCKET_NTHREADS and NCCL_NSOCKS_PERTHREAD must be set";
-    return;
-  }
+            // Check if the required environment variables are set
+            const char *nThreadsEnv = getenv("NCCL_SOCKET_NTHREADS");
+            const char *nSocksPerThreadEnv = getenv("NCCL_NSOCKS_PERTHREAD");
 
-    // Parse with validation - both must be positive
-  int nThreads = ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
-  int nSocksPerThread = ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
+            if (!nThreadsEnv || !nSocksPerThreadEnv) {
+              GTEST_SKIP()
+                  << "SKIPPING TEST: Required environment variables not set. "
+                  << "This test requires total sockets (nThreads * "
+                     "nSocksPerThread) > MAX_SOCKETS (64). "
+                  << "Environment variables NCCL_SOCKET_NTHREADS and "
+                     "NCCL_NSOCKS_PERTHREAD must be set";
+              return;
+            }
 
-  // Check for potential overflow before multiplication
-  if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
-    GTEST_SKIP() << "SKIPPING TEST: Configuration would cause integer overflow. "
-                 << "NCCL_SOCKET_NTHREADS=" << nThreads << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
-                 << " exceeds maximum integer value. Please use smaller values.";
-    return;
-  }
+            // Parse with validation - both must be positive
+            int nThreads =
+                ParseEnvVar(nThreadsEnv, "NCCL_SOCKET_NTHREADS", 0, 1);
+            int nSocksPerThread =
+                ParseEnvVar(nSocksPerThreadEnv, "NCCL_NSOCKS_PERTHREAD", 0, 1);
 
-  int totalSockets = nThreads * nSocksPerThread;
+            // Check for potential overflow before multiplication
+            if (nThreads > 0 && nSocksPerThread > INT_MAX / nThreads) {
+              GTEST_SKIP() << "SKIPPING TEST: Configuration would cause "
+                              "integer overflow. "
+                           << "NCCL_SOCKET_NTHREADS=" << nThreads
+                           << " * NCCL_NSOCKS_PERTHREAD=" << nSocksPerThread
+                           << " exceeds maximum integer value. Please use "
+                              "smaller values.";
+              return;
+            }
 
-  INFO(NCCL_LOG_INFO, "Environment configuration found:");
-  INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
-  INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
-  INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
+            int totalSockets = nThreads * nSocksPerThread;
 
-  // Check if configuration is set to trigger the excessive sockets warning
-  const int MAX_SOCKETS = 64;
-  if (totalSockets <= MAX_SOCKETS) {
-    GTEST_SKIP() << "SKIPPING TEST: Total sockets must be > " << MAX_SOCKETS << " to test excessive socket warning. "
-                 << "Current total sockets=" << totalSockets
-                 << " (nThreads=" << nThreads << " * nSocksPerThread=" << nSocksPerThread << "). "
-                 << "Please set environment variables such that total > " << MAX_SOCKETS << ", e.g.: "
-                 << "export NCCL_SOCKET_NTHREADS=9 && export NCCL_NSOCKS_PERTHREAD=8. "
-                 << "Total sockets must be > MAX_SOCKETS (" << MAX_SOCKETS << ") to trigger warning";
-    return;
-  }
+            INFO(NCCL_LOG_INFO, "Environment configuration found:");
+            INFO(NCCL_LOG_INFO, "  NCCL_SOCKET_NTHREADS=%d", nThreads);
+            INFO(NCCL_LOG_INFO, "  NCCL_NSOCKS_PERTHREAD=%d", nSocksPerThread);
+            INFO(NCCL_LOG_INFO, "  Total sockets=%d", totalSockets);
 
-  // Additional validation against NCCL_NET_MAX_REQUESTS for reasonable upper bounds
-  if (totalSockets > NCCL_NET_MAX_REQUESTS * 10) {  // Allow 10x for testing excessive config
-    GTEST_SKIP() << "SKIPPING TEST: Total sockets=" << totalSockets << " is unreasonably large (> " << (NCCL_NET_MAX_REQUESTS * 10) << "). "
-                 << "Please use more reasonable values for testing. NCCL_NET_MAX_REQUESTS=" << NCCL_NET_MAX_REQUESTS << ". "
-                 << "Example: export NCCL_SOCKET_NTHREADS=10 && export NCCL_NSOCKS_PERTHREAD=10";
-    return;
-  }
+            // Check if configuration is set to trigger the excessive sockets
+            // warning
+            const int MAX_SOCKETS = 64;
+            if (totalSockets <= MAX_SOCKETS) {
+              GTEST_SKIP()
+                  << "SKIPPING TEST: Total sockets must be > " << MAX_SOCKETS
+                  << " to test excessive socket warning. "
+                  << "Current total sockets=" << totalSockets
+                  << " (nThreads=" << nThreads
+                  << " * nSocksPerThread=" << nSocksPerThread << "). "
+                  << "Please set environment variables such that total > "
+                  << MAX_SOCKETS << ", e.g.: "
+                  << "export NCCL_SOCKET_NTHREADS=9 && export "
+                     "NCCL_NSOCKS_PERTHREAD=8. "
+                  << "Total sockets must be > MAX_SOCKETS (" << MAX_SOCKETS
+                  << ") to trigger warning";
+              return;
+            }
 
-  INFO(NCCL_LOG_INFO,
-       "Configuration valid for testing excessive sockets warning");
-  INFO(NCCL_LOG_INFO, "Total sockets=%d > MAX_SOCKETS=64", totalSockets);
+            // Additional validation against NCCL_NET_MAX_REQUESTS for
+            // reasonable upper bounds
+            if (totalSockets >
+                NCCL_NET_MAX_REQUESTS *
+                    10) { // Allow 10x for testing excessive config
+              GTEST_SKIP() << "SKIPPING TEST: Total sockets=" << totalSockets
+                           << " is unreasonably large (> "
+                           << (NCCL_NET_MAX_REQUESTS * 10) << "). "
+                           << "Please use more reasonable values for testing. "
+                              "NCCL_NET_MAX_REQUESTS="
+                           << NCCL_NET_MAX_REQUESTS << ". "
+                           << "Example: export NCCL_SOCKET_NTHREADS=10 && "
+                              "export NCCL_NSOCKS_PERTHREAD=10";
+              return;
+            }
 
-  // Test socket properties
-  TestSocketProperties();
+            INFO(NCCL_LOG_INFO,
+                 "Configuration valid for testing excessive sockets warning");
+            INFO(NCCL_LOG_INFO, "Total sockets=%d > MAX_SOCKETS=64",
+                 totalSockets);
 
-  // Initialize to trigger the warning logic
-  char handle[NCCL_NET_HANDLE_MAXSIZE];
-  void *listenComm = nullptr;
-  ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
+            // Test socket properties
+            TestSocketProperties();
 
-  if (result == ncclSuccess && listenComm) {
-    // The implementation should have limited the sockets to MAX_SOCKETS
-    // internally
-    INFO(NCCL_LOG_INFO, "*** SUCCESS: Listen succeeded with excessive total "
-                        "sockets - limits enforced internally ***");
-    ncclNetSocket.closeListen(listenComm);
-  } else {
-    INFO(NCCL_LOG_INFO, "Listen failed with result: %d", result);
-  }
+            // Initialize to trigger the warning logic
+            char handle[NCCL_NET_HANDLE_MAXSIZE];
+            void *listenComm = nullptr;
+            ncclResult_t result = ncclNetSocket.listen(0, handle, &listenComm);
 
-  INFO(NCCL_LOG_INFO, "TestExcessiveSocketConfig completed");
+            if (result == ncclSuccess && listenComm) {
+              // The implementation should have limited the sockets to
+              // MAX_SOCKETS internally
+              INFO(NCCL_LOG_INFO,
+                   "*** SUCCESS: Listen succeeded with excessive total "
+                   "sockets - limits enforced internally ***");
+              ncclNetSocket.closeListen(listenComm);
+            } else {
+              INFO(NCCL_LOG_INFO, "Listen failed with result: %d", result);
+            }
+
+            INFO(NCCL_LOG_INFO, "TestExcessiveSocketConfig completed");
+        })
+        .withEnvironment({{"NCCL_SOCKET_NTHREADS", "10"},
+                          {"NCCL_NSOCKS_PERTHREAD", "10"},
+                          {"NCCL_DEBUG", "TRACE"},
+                          {"NCCL_DEBUG_SUBSYS", "ALL"}})
+  );
 }
 
 // Test to trigger request allocation failure scenario

@@ -247,9 +247,9 @@ ncclResult_t ncclP2pAllocateShareableBuffer(size_t size, int refcount, ncclIpcDe
   } else {
     // Allocate a CUDA buffer and generate an IPC handle for it
 #if defined(HIP_UNCACHED_MEMORY)
-    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, hipDeviceMallocUncached));
+    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, hipDeviceMallocUncached));
 #else
-    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, nullptr, hipDeviceMallocFinegrained));
+    NCCLCHECK(ncclCudaCalloc((char **)ptr, size, hipDeviceMallocFinegrained));
 #endif
     cudaError_t res = cudaIpcGetMemHandle(&ipcDesc->devIpc, *ptr);
     if (res != cudaSuccess) {
@@ -667,9 +667,9 @@ static ncclResult_t p2pSendProxySetup(struct ncclProxyConnection* connection, st
     connection->transportResources = proxyInfo;
 
 #if defined(HIP_UNCACHED_MEMORY)
-    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, hipDeviceMallocUncached));
+    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], hipDeviceMallocUncached));
 #else
-    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], nullptr, hipDeviceMallocFinegrained));
+    NCCLCHECK(ncclCudaCalloc(&proxyInfo->ceDevBuff, proxyState->buffSizes[NCCL_PROTO_SIMPLE], hipDeviceMallocFinegrained));
 #endif
 
     // Create a SHM segment for the peer to attach to

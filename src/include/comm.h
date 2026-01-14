@@ -24,6 +24,10 @@
 #include "rccl_common.h"
 #include "recorder.h"
 
+#ifdef ENABLE_ROCSHMEM
+#include <rocshmem/rocshmem.hpp>
+#endif
+
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 #define HIPRT_CB
 #else
@@ -205,7 +209,12 @@ struct ncclTaskColl {
   int chunkSteps, sliceSteps;
   // Computed later:
   size_t trafficBytes;
+#ifdef ENABLE_WARP_SPEED
+  int32_t nMaxChannels:16;
+  bool useWarpSpeed;
+#else
   int32_t nMaxChannels:8;
+#endif
   int32_t nWarps:8;
   int32_t algorithm:8, protocol:8, pipeline:8;
   uint32_t isCollnet:1, isNvls:1;
@@ -550,7 +559,7 @@ struct ncclComm {
   float bandwidths[NCCL_NUM_FUNCTIONS][NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   int maxThreads[NCCL_NUM_ALGORITHMS][NCCL_NUM_PROTOCOLS];
   uint64_t minMaxLLRange[RCCL_TUNABLE_COLLS][NCCL_NUM_PROTOCOLS - 1][RCCL_PROTOCOL_ENTRY_SIZE];
-  uint64_t minMaxChannelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, the two values for min/max size-threshold 
+  uint64_t minMaxChannelThresholds[RCCL_TUNABLE_COLLS][RCCL_CHANNELS_TUNABLE_ENTRIES][3]; //for each collective, set for 5 channel-counts: 32,40,48,56,64, the two values for min/max size-threshold
 
   /* This attribute can indicate the states of communicators and return code of
   * asynchronous NCCL operations. */
@@ -628,8 +637,6 @@ struct ncclComm {
   struct P2pSchedulePair { int sendRank; int recvRank; } *p2pSchedule;
 
   struct ncclKernelPlanner planner;
-
-  hipStream_t sideStream; // [RCCL] Cached non-captured stream
 
   cudaMemPool_t memPool;
   // Queue of events and associated callbacks for cleaning up asynchronous work.
@@ -721,7 +728,18 @@ struct ncclComm {
   char* archName;
   // multiProcessorCount from hipDeviceProp_t [RCCL]
   int cuCount;
-  
+
+#ifdef ENABLE_ROCSHMEM
+  // circular ring buffer in rocshmem symmetric heap
+  void** sourceRshmem;
+  void** destRshmem;
+  rocshmem::rocshmem_team_t team_reduce_world_dup;
+  int enableRocshmem;
+  int rocshmemThreshold;
+  int numSymBuf;
+  int symId;
+#endif
+
   uint64_t endMagic;
 };
 

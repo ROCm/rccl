@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 #include "alt_rsmi.h"
+#include "common/ProcessIsolatedTestRunner.hpp"
 
 #include <cerrno>
 #include <cstdio>
@@ -17,83 +18,80 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
+#include <cstdlib>
+#include <limits>
+#include <filesystem>
+
+// ============================================================================
+// Internal structures and variables from alt_rsmi.cc (TEST USE ONLY)
+// ============================================================================
+// When alt_rsmi.cc is compiled with ARSMI_TEST_BUILD, internal variables
+// have external linkage and can be accessed by test utilities
 
 struct ARSMI_systemNode {
-  uint32_t s_node_id = 0;
-  uint64_t s_gpu_id = 0;
-  uint64_t s_unique_id = 0;
-  uint64_t s_location_id = 0;
-  uint64_t s_bdf = 0;
-  uint64_t s_domain = 0;
-  uint8_t s_bus = 0;
-  uint8_t s_device = 0;
-  uint8_t s_function = 0;
-  uint8_t s_partition_id = 0;
-  std::string s_card;
+    uint32_t s_node_id = 0;
+    uint64_t s_gpu_id = 0;
+    uint64_t s_unique_id = 0;
+    uint64_t s_location_id = 0;
+    uint64_t s_bdf = 0;
+    uint64_t s_domain = 0;
+    uint8_t  s_bus = 0;
+    uint8_t  s_device = 0;
+    uint8_t  s_function = 0;
+    uint8_t  s_partition_id = 0;
+    std::string s_card;
 };
 
-const char *kPathDRMRoot = "/sys/class/drm";
-const char *kKFDNodesPathRoot = "/sys/class/kfd/kfd/topology/nodes";
-uint32_t kAmdGpuId = 0x1002;
+// External declarations of internal variables from alt_rsmi.cc
+extern thread_local const char *kKFDNodesPathRoot;
+extern thread_local int ARSMI_num_devices;
+extern thread_local std::vector<ARSMI_systemNode> ARSMI_orderedNodes;
+extern thread_local std::vector<std::vector<ARSMI_linkInfo>> ARSMI_orderedLinks;
 
-// Vector containing data about each node, ordered by bdf ID
-thread_local std::vector<ARSMI_systemNode> ARSMI_orderedNodes;
+// ============================================================================
+// Test utilities for manipulating alt_rsmi.cc internal state
+// ============================================================================
+namespace AltRsmiTestUtils {
 
-// 2-D matrix with link information between each pair of nodes.
-thread_local std::vector<std::vector<ARSMI_linkInfo>> ARSMI_orderedLinks;
+// Storage for the test path to ensure the pointer remains valid
+static std::string sTestNodesPath;
 
-// Number of devices recognized
-thread_local int ARSMI_num_devices = -1;
+// Set the KFD nodes path for testing
+// This redirects file reads to test directories
+static void SetNodesPath(const std::string& path) {
+    sTestNodesPath = path;
+    kKFDNodesPathRoot = sTestNodesPath.c_str();
+}
 
-int getNodeIndex(uint32_t node_id);
+// Reset ARSMI internal state between tests
+// This ensures test isolation
+static void ResetState() {
+    ARSMI_num_devices = -1;
+    ARSMI_orderedNodes.clear();
+    ARSMI_orderedLinks.clear();
+}
 
-std::string DevicePath(uint32_t dev_id);
+// Get current number of devices (for verification)
+static int GetNumDevices() {
+    return ARSMI_num_devices;
+}
 
-int isRegularFile(std::string fname, bool *is_reg);
+} // namespace AltRsmiTestUtils
 
-bool isNumber(const std::string &s);
-
-int openNodeFile(uint32_t dev_id, std::string node_file, std::ifstream *fs);
-
-int countIoLinks(uint32_t dev_id);
-
-int openLinkFile(uint32_t dev_id, uint32_t target_id, std::string node_file,
-                 std::ifstream *fs);
-int readGpuId(uint32_t node_id, uint64_t *gpu_id);
-
-bool isNodeSupported(uint32_t node_indx);
-
-int getPropertyValue(std::string property, uint64_t *value,
-                     std::map<std::string, uint64_t> &properties);
-
-bool fileExists(char const *filename);
-
-int ARSMI_readDeviceProperties(uint32_t node_id,
-                               std::map<std::string, uint64_t> &properties);
-
-int ARSMI_readLinkProperties(uint32_t node_id, uint32_t target_node_id,
-                             std::map<std::string, uint64_t> &properties);
-
-// /sys/class/kfd/kfd/topology/nodes/*/properties
-int read_node_properties(uint32_t node, std::string property_name,
-                         uint64_t *val,
-                         std::map<std::string, uint64_t> &properties);
-
-// /sys/class/kfd/kfd/topology/nodes/*/io_links/*/properties
-int read_link_properties(uint32_t node, uint32_t target,
-                         std::string property_name, uint64_t *val,
-                         std::map<std::string, uint64_t> &properties);
-
-// /sys/class/kfd/kfd/topology/nodes/*/gpu_id
-int getGpuId(uint32_t node, uint64_t *gpu_id);
+// Test paths for creating mock KFD filesystem
+// Use std::filesystem::temp_directory_path() for portability
+static const std::string kTestKFDBasePath =
+    std::filesystem::temp_directory_path().string() + "/test_kfd_arsmi";
+static const std::string kTestKFDPath =
+    std::filesystem::temp_directory_path().string() + "/test_kfd_arsmi/topology/nodes";
 
 namespace RcclUnitTesting {
 
-class AltRsmiTest : public ::testing::Test {
-
-protected:
-  // Helper function to create directories recursively
-  int createDirectory(const std::string &path) {
+// Helper functions for creating test filesystem structures
+// All file operations are scoped to kTestKFDBasePath for safety
+namespace {
+  // Internal helper to create directories recursively (operates on absolute paths)
+  int createDirectoryImpl(const std::string &path) {
     size_t pos = 0;
     std::string currentPath;
 
@@ -114,10 +112,14 @@ protected:
     return 0; // Success
   }
 
-  // Helper function to remove a directory recursively
-  int removeDirectory(const std::string &path) {
+  // Internal helper to remove a directory recursively (operates on absolute paths)
+  int removeDirectoryImpl(const std::string &path) {
     DIR *dir = opendir(path.c_str());
     if (!dir) {
+      // ENOENT means directory doesn't exist - not an error during cleanup
+      if (errno == ENOENT) {
+        return 0;
+      }
       std::cerr << "Failed to open directory: " << path << " (errno: " << errno
                 << ")" << std::endl;
       return -1;
@@ -143,7 +145,7 @@ protected:
 
       if (S_ISDIR(entryStat.st_mode)) {
         // Recursively remove subdirectory
-        if (removeDirectory(fullPath) == -1) {
+        if (removeDirectoryImpl(fullPath) == -1) {
           closedir(dir);
           return -1;
         }
@@ -170,21 +172,60 @@ protected:
     return 0; // Success
   }
 
-  // Helper function to create a file with content
-  void createFile(const std::string &path, const std::string &content) {
-    std::ofstream file(path);
+  // Validate that a path is within the test sandbox
+  bool isPathInSandbox(const std::string &path) {
+    // Must start with kTestKFDBasePath to be valid
+    return path.find(kTestKFDBasePath) == 0;
+  }
+
+  // Create directory within test sandbox (relative to kTestKFDPath)
+  // Pass "" to create the base kTestKFDPath directory
+  int createDirectory(const std::string &relativePath = "") {
+    std::string fullPath = relativePath.empty()
+        ? std::string(kTestKFDPath)
+        : std::string(kTestKFDPath) + "/" + relativePath;
+
+    if (!isPathInSandbox(fullPath)) {
+      std::cerr << "error: path " << fullPath << " is outside test sandbox" << std::endl;
+      return -1;
+    }
+    return createDirectoryImpl(fullPath);
+  }
+
+  // Remove entire test sandbox directory
+  int removeTestSandbox() {
+    return removeDirectoryImpl(kTestKFDBasePath);
+  }
+
+  // Create a file within test sandbox (relative to kTestKFDPath)
+  void createFile(const std::string &relativePath, const std::string &content) {
+    std::string fullPath = std::string(kTestKFDPath) + "/" + relativePath;
+
+    if (!isPathInSandbox(fullPath)) {
+      std::cerr << "error: path " << fullPath << " is outside test sandbox" << std::endl;
+      return;
+    }
+
+    std::ofstream file(fullPath);
     if (!file) {
-      std::cerr << "Failed to create file: " << path << ", errno: " << errno << std::endl;
+      std::cerr << "Failed to create file: " << fullPath << ", errno: " << errno << std::endl;
       return;
     }
     file << content;
     file.close();
   }
 
-  // Helper function to remove a file
-  int removeFile(const std::string &path) {
-    if (unlink(path.c_str()) == -1) {
-      std::cerr << "Failed to remove file: " << path << " (errno: " << errno
+  // Remove a file within test sandbox (relative to kTestKFDPath)
+  int removeFile(const std::string &relativePath) {
+    std::string fullPath = std::string(kTestKFDPath) + "/" + relativePath;
+
+    if (!isPathInSandbox(fullPath)) {
+      std::cerr << "Security error: path " << fullPath << " is outside test sandbox" << std::endl;
+      return -1;
+    }
+
+    if (unlink(fullPath.c_str()) == -1) {
+      std::cerr << "Failed to remove file: " << fullPath << " (errno: " << errno
                 << ")" << std::endl;
       return -1; // Return error if file removal fails
     }
@@ -193,41 +234,23 @@ protected:
 
   // Function to create the test directory structure and files
   void setupTestFiles() {
-    const std::string basePath = "/tmp/test_kfd/topology/nodes";
-
-    createDirectory(basePath);
+    createDirectory();  // Creates kTestKFDPath
 
     // Create node 0 with valid data
-    createDirectory(basePath + "/0");
-    createFile(basePath + "/0/gpu_id", "4098\n");
-    createFile(basePath + "/0/properties", "unique_id 16336014475442738425\n"
-                                           "location_id 23552\n"
-                                           "domain 2\n"
-                                           "vendor_id 4098\n");
+    createDirectory("0");
+    createFile("0/gpu_id", "4098\n");
+    createFile("0/properties", "unique_id 16336014475442738425\n"
+                               "location_id 23552\n"
+                               "domain 0\n"
+                               "vendor_id 4098\n");
 
-    createDirectory(basePath + "/0/io_links/0");
-    createFile(basePath + "/0/io_links/0/properties",
-               "type 5\n"
-               "version_major 0\n"
-               "version_minor 0\n"
-               "node_from 0\n"
-               "node_to 1\n"
-               "weight 21\n"
-               "min_latency 0\n"
-               "max_latency 0\n"
-               "min_bandwidth 0\n"
-               "max_bandwidth 0\n"
-               "recommended_transfer_size 0\n"
-               "recommended_sdma_engine_id_mask 0\n"
-               "flags 0\n");
-
-    createDirectory(basePath + "/0/io_links/1");
-    createFile(basePath + "/0/io_links/1/properties",
+    createDirectory("0/io_links/0");
+    createFile("0/io_links/0/properties",
                "type 2\n"
                "version_major 0\n"
                "version_minor 0\n"
                "node_from 0\n"
-               "node_to 0\n"
+               "node_to 1\n"
                "weight 21\n"
                "min_latency 0\n"
                "max_latency 0\n"
@@ -237,30 +260,31 @@ protected:
                "recommended_sdma_engine_id_mask 0\n"
                "flags 0\n");
 
-    createDirectory(basePath + "/1");
-    createFile(basePath + "/1/properties", "unique_id 16336014475442738426\n"
-                                "location_id 23553\n"
-                                "domain 1\n"
-                                "vendor_id 4098\n");
-
-    createDirectory(basePath + "/1/io_links/0");
-    createFile(basePath + "/1/io_links/0/properties",
-               "type 5\n"
+    createDirectory("0/io_links/1");
+    createFile("0/io_links/1/properties",
+               "type 11\n"
                "version_major 0\n"
                "version_minor 0\n"
-               "node_from 1\n"
-               "node_to 0\n"
+               "node_from 0\n"
+               "node_to 1\n"
                "weight 21\n"
                "min_latency 0\n"
                "max_latency 0\n"
                "min_bandwidth 0\n"
-               "max_bandwidth 0\n"
+               "max_bandwidth 50000\n"
                "recommended_transfer_size 0\n"
                "recommended_sdma_engine_id_mask 0\n"
                "flags 0\n");
 
-    createDirectory(basePath + "/1/io_links/1");
-    createFile(basePath + "/1/io_links/1/properties",
+    createDirectory("1");
+    createFile("1/gpu_id", "4098\n");
+    createFile("1/properties", "unique_id 16336014475442738426\n"
+                               "location_id 23553\n"
+                               "domain 1\n"
+                               "vendor_id 4098\n");
+
+    createDirectory("1/io_links/0");
+    createFile("1/io_links/0/properties",
                "type 2\n"
                "version_major 0\n"
                "version_minor 0\n"
@@ -270,637 +294,983 @@ protected:
                "min_latency 0\n"
                "max_latency 0\n"
                "min_bandwidth 0\n"
-               "max_bandwidth 0\n"
+               "max_bandwidth 32000\n"
+               "recommended_transfer_size 0\n"
+               "recommended_sdma_engine_id_mask 0\n"
+               "flags 0\n");
+
+    createDirectory("1/io_links/1");
+    createFile("1/io_links/1/properties",
+               "type 11\n"
+               "version_major 0\n"
+               "version_minor 0\n"
+               "node_from 1\n"
+               "node_to 0\n"
+               "weight 21\n"
+               "min_latency 0\n"
+               "max_latency 0\n"
+               "min_bandwidth 0\n"
+               "max_bandwidth 50000\n"
                "recommended_transfer_size 0\n"
                "recommended_sdma_engine_id_mask 0\n"
                "flags 0\n");
 
     uint32_t invalid_dev_id = 9999; // Device ID that doesn't exist
-    createDirectory(basePath + "/" + std::to_string(invalid_dev_id) + "/io_links/");
-
-    ARSMI_num_devices = 2;
-    ARSMI_systemNode node0 = {0, 0, 0, 0, 200, 0, 0, 0, 0, 0, ""};
-    ARSMI_systemNode node1 = {1, 0, 0, 0, 100, 0, 0, 0, 0, 0, ""};
-
-    ARSMI_orderedNodes.clear();
-    ARSMI_orderedNodes.push_back(node0); // Node 0
-    ARSMI_orderedNodes.push_back(node1); // Node 1
-
-    ARSMI_orderedLinks.clear();
-    ARSMI_orderedLinks.resize(2);
-
-    // Link info from node 0 to node 0 and node 1
-    ARSMI_orderedLinks[0].push_back({0, 0, 0, ARSMI_IOLINK_TYPE_UNDEFINED, 0, 0, 0}); // self-link
-    ARSMI_orderedLinks[0].push_back({0, 1, 1, ARSMI_IOLINK_TYPE_PCIEXPRESS, 40, 1000, 2000}); // 0->1
-
-    // Link info from node 1 to node 0 and node 1
-    ARSMI_orderedLinks[1].push_back({1, 0, 1, ARSMI_IOLINK_TYPE_PCIEXPRESS, 40, 1000, 2000}); // 1->0
-    ARSMI_orderedLinks[1].push_back({1, 1, 0, ARSMI_IOLINK_TYPE_UNDEFINED, 0, 0, 0}); // self-link
+    createDirectory(std::to_string(invalid_dev_id) + "/io_links/");
   }
 
-  void SetUp() override {
-    // Redirect kKFDNodesPathRoot to a temporary directory for testing
-    kKFDNodesPathRoot = "/tmp/test_kfd/topology/nodes";
+  // Common setup for all tests
+  void setupTestEnvironment() {
+    // Reset ARSMI state for test isolation
+    AltRsmiTestUtils::ResetState();
 
-    // Create the test directory structure and files
+    // Redirect kKFDNodesPathRoot to test directory
+    AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+    // Create the test directory structure
     setupTestFiles();
   }
 
-  void TearDown() override {
-    // Clean up the temporary directory
-    removeDirectory("/tmp/test_kfd");
+  // Common cleanup for all tests (not strictly necessary with process isolation,
+  // but good practice to clean up temp files)
+  void cleanupTestEnvironment() {
+    AltRsmiTestUtils::ResetState();
+    removeTestSandbox();
   }
-};
 
-TEST_F(AltRsmiTest, ARSMIInitDefault) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  int result = ARSMI_init();
+} // anonymous namespace
 
-  ASSERT_EQ(result, 0);
+// Tests using process isolation for complete state isolation
+TEST(AltRsmiTest, ARSMIInitDefault) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitDefault",
+    []() {
+      setupTestEnvironment();
+
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0);
+
+      // Verify that devices were discovered
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 2);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingIoLinksPropertiesFile) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  // Remove properties file for io_links
-  removeFile("/tmp/test_kfd/topology/nodes/0/io_links/0/properties");
-  removeFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties");
+TEST(AltRsmiTest, ARSMIInitMissingIoLinksPropertiesFile) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingIoLinksPropertiesFile",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      // Remove properties file for io_links
+      removeFile("0/io_links/0/properties");
+      removeFile("0/io_links/1/properties");
 
-  ASSERT_EQ(result, 0);
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0);
+
+      // Should still initialize successfully even with missing link properties
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_GT(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingNodeToProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties",
-             "type 2\n"
-             "version_major 0\n"
-             "version_minor 0\n"
-             "node_from 0\n"
-             // "node_to 0\n"  // Missing node_to
-             "weight 21\n"
-             "min_latency 0\n"
-             "max_latency 0\n"
-             "min_bandwidth 0\n"
-             "max_bandwidth 64000\n"
-             "recommended_transfer_size 0\n"
-             "recommended_sdma_engine_id_mask 0\n"
-             "flags 0\n");
+TEST(AltRsmiTest, ARSMIInitMissingNodeToProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingNodeToProperty",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      createFile("0/io_links/1/properties",
+                 "type 2\n"
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 // "node_to 0\n"  // Missing node_to
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 64000\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  ASSERT_EQ(result, 0); // Expect success
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0); // Expect success even with missing node_to
+
+      // Verify devices are still initialized
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_GT(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingWeightProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties",
-             "type 2\n"
-             "version_major 0\n"
-             "version_minor 0\n"
-             "node_from 0\n"
-             "node_to 0\n"
-             // "weight 21\n"  // Missing weight
-             "min_latency 0\n"
-             "max_latency 0\n"
-             "min_bandwidth 0\n"
-             "max_bandwidth 64000\n"
-             "recommended_transfer_size 0\n"
-             "recommended_sdma_engine_id_mask 0\n"
-             "flags 0\n");
+TEST(AltRsmiTest, ARSMIInitMissingWeightProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingWeightProperty",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      createFile("0/io_links/1/properties",
+                 "type 2\n"
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 // "weight 21\n"  // Missing weight
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 64000\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  ASSERT_NE(result, 0); // Expect non-zero error code
+      int result = ARSMI_init();
+      // returns 1 when weight property is missing
+      ASSERT_EQ(result, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingTypeProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties",
-             // "type 5\n" // Missing type
-             "version_major 0\n"
-             "version_minor 0\n"
-             "node_from 0\n"
-             "node_to 0\n"
-             "weight 21\n"
-             "min_latency 0\n"
-             "max_latency 0\n"
-             "min_bandwidth 0\n"
-             "max_bandwidth 0\n"
-             "recommended_transfer_size 0\n"
-             "recommended_sdma_engine_id_mask 0\n"
-             "flags 0\n");
+TEST(AltRsmiTest, ARSMIInitMissingTypeProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingTypeProperty",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      createFile("0/io_links/1/properties",
+                 // "type 5\n" // Missing type
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 0\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  ASSERT_NE(result, 0); // Expect non-zero error code
+      int result = ARSMI_init();
+      // returns 1 when type property is missing
+      ASSERT_EQ(result, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitTypePCIeProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  int result = ARSMI_init();
+TEST(AltRsmiTest, ARSMIInitTypePCIeProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitTypePCIeProperty",
+    []() {
+      // Create a setup with ONLY PCIe links (type 2) to test PCIe specifically
+      removeTestSandbox();
+      createDirectory();
 
-  ASSERT_EQ(result, 0);
+      // Create node 0 with PCIe-only link to node 1
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties", "unique_id 100\n"
+                                 "location_id 23552\n"
+                                 "domain 0\n"
+                                 "vendor_id 4098\n");
+      createDirectory("0/io_links/0");
+      createFile("0/io_links/0/properties",
+                 "type 2\n"  // PCIe type
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 16000\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
+
+      // Create node 1 with PCIe-only link to node 0
+      createDirectory("1");
+      createFile("1/gpu_id", "4098\n");
+      createFile("1/properties", "unique_id 101\n"
+                                 "location_id 23553\n"
+                                 "domain 1\n"
+                                 "vendor_id 4098\n");
+      createDirectory("1/io_links/0");
+      createFile("1/io_links/0/properties",
+                 "type 2\n"  // PCIe type
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 1\n"
+                 "node_to 0\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 16000\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0);
+
+      // Verify link info is correctly identified as PCIe
+      ARSMI_linkInfo info;
+      ASSERT_EQ(ARSMI_topo_get_link_info(0, 1, &info), 0);
+      ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_PCIEXPRESS);
+      ASSERT_EQ(info.src_node, 0);
+      ASSERT_EQ(info.dst_node, 1);
+      ASSERT_EQ(info.hops, 2);
+      ASSERT_EQ(info.weight, 21);
+      ASSERT_EQ(info.max_bandwidth, 16000);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingMinBWProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties",
-             "type 11\n"
-             "version_major 0\n"
-             "version_minor 0\n"
-             "node_from 0\n"
-             "node_to 0\n"
-             "weight 21\n"
-             "min_latency 0\n"
-             "max_latency 0\n"
-             // "min_bandwidth 0\n"  // Missing min_bandwidth
-             "max_bandwidth 0\n"
-             "recommended_transfer_size 0\n"
-             "recommended_sdma_engine_id_mask 0\n"
-             "flags 0\n");
+TEST(AltRsmiTest, ARSMIInitMissingMinBWProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingMinBWProperty",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      createFile("0/io_links/1/properties",
+                 "type 11\n"
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 // "min_bandwidth 0\n"  // Missing min_bandwidth
+                 "max_bandwidth 0\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  ASSERT_NE(result, 0); // Expect non-zero error code
+      int result = ARSMI_init();
+      // returns 1 when min_bandwidth property is missing
+      ASSERT_EQ(result, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIInitMissingMaxBWProperty) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties",
-             "type 5\n"
-             "version_major 0\n"
-             "version_minor 0\n"
-             "node_from 0\n"
-             "node_to 0\n"
-             "weight 21\n"
-             "min_latency 0\n"
-             "max_latency 0\n"
-             "min_bandwidth 0\n"
-             // "max_bandwidth 0\n"  // Missing max_bandwidth
-             "recommended_transfer_size 0\n"
-             "recommended_sdma_engine_id_mask 0\n"
-             "flags 0\n");
+TEST(AltRsmiTest, ARSMIInitMissingMaxBWProperty) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitMissingMaxBWProperty",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_init();
+      createFile("0/io_links/1/properties",
+                 "type 5\n"
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 // "max_bandwidth 0\n"  // Missing max_bandwidth
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  ASSERT_NE(result, 0); // Expect non-zero error code
+      int result = ARSMI_init();
+      // returns 1 when max_bandwidth property is missing
+      ASSERT_EQ(result, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIGetNumDevicesUninitialized) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  uint32_t num_devices = 0;
+TEST(AltRsmiTest, ARSMIGetNumDevicesUninitialized) {
+  RUN_ISOLATED_TEST(
+    "ARSMIGetNumDevicesUninitialized",
+    []() {
+      setupTestEnvironment();
 
-  int result = ARSMI_get_num_devices(&num_devices);
+      // Verify ARSMI is uninitialized (ARSMI_num_devices == -1)
+      ASSERT_EQ(AltRsmiTestUtils::GetNumDevices(), -1);
 
-  // Verify that the function initializes successfully
-  ASSERT_EQ(result, 0);
+      // Don't call ARSMI_init, let ARSMI_get_num_devices initialize
+      uint32_t num_devices = 0;
 
-  // Verify that the number of devices is correctly set
-  ASSERT_EQ(num_devices, ARSMI_num_devices);
+      int result = ARSMI_get_num_devices(&num_devices);
+
+      // Verify that the function initializes successfully
+      ASSERT_EQ(result, 0);
+
+      // Verify that auto-initialization occurred (ARSMI_num_devices >= 0)
+      ASSERT_GE(AltRsmiTestUtils::GetNumDevices(), 0);
+
+      // Verify that the number of devices is correctly set
+      ASSERT_EQ(num_devices, 2);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIDevPciIdGetNullBdfId) {
-  uint32_t device_index = 0;
-  int result = ARSMI_dev_pci_id_get(device_index, nullptr);
+TEST(AltRsmiTest, ARSMIDevPciIdGetNullBdfId) {
+  RUN_ISOLATED_TEST(
+    "ARSMIDevPciIdGetNullBdfId",
+    []() {
+      setupTestEnvironment();
 
-  ASSERT_EQ(result, EINVAL);
+      uint32_t device_index = 0;
+      int result = ARSMI_dev_pci_id_get(device_index, nullptr);
+
+      ASSERT_EQ(result, EINVAL);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ARSMIDevPciIdGetUninitialized) {
-  ARSMI_num_devices = -1; // Force uninitialized state
-  uint32_t device_index = 0;
-  uint64_t bdfid = 0;
+TEST(AltRsmiTest, ARSMIDevPciIdGetValid) {
+  RUN_ISOLATED_TEST(
+    "ARSMIDevPciIdGetValid",
+    []() {
+      setupTestEnvironment();
 
-  // Fail to initialize the function
-  // kKFDNodesPathRoot = "/invalid/path/to/file";
-  kKFDNodesPathRoot = "/invalid/path/to/file";
+      uint32_t device_index = 0;
+      uint64_t bdfid = 0;
 
-  int result = ARSMI_dev_pci_id_get(device_index, &bdfid);
+      int result = ARSMI_dev_pci_id_get(device_index, &bdfid);
 
-  // Verify that the function fails to initialize and returns an error
-  ASSERT_NE(result, 0);
+      // Verify that the function succeeds
+      ASSERT_EQ(result, 0);
+      // BDF ID should be non-zero for valid devices
+      ASSERT_NE(bdfid, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, GetNodeIndexInvalidNode) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  int result = getNodeIndex(invalid_node_id);
-  ASSERT_EQ(result, -1); // Expect -1 for invalid node
+// Tests covering invalid file/directory scenarios through public API
+TEST(AltRsmiTest, ARSMIInitWithInvalidGpuIdData) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithInvalidGpuIdData",
+    []() {
+      // Create a gpu_id file with invalid (non-numeric) data
+      removeTestSandbox();
+      createDirectory();
+      createDirectory("0");
+      createFile("0/gpu_id", "invalid_gpu_id");
+      createFile("0/properties", "unique_id 12345\n"
+                                 "location_id 23552\n"
+                                 "domain 0\n"
+                                 "vendor_id 4098\n");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+
+      // Init should handle invalid gpu_id gracefully
+      ASSERT_EQ(result, 0);
+
+      // Should not discover any devices with invalid gpu_id
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, DevicePathInvalidDeviceId) {
-  uint32_t invalid_dev_id = 9999; // Device ID that doesn't exist
-  std::string path = DevicePath(invalid_dev_id);
-  ASSERT_FALSE(path.empty()); // Path should still be constructed, but it won't
-                              // point to a valid device
+TEST(AltRsmiTest, ARSMIInitWithEmptyPropertiesFile) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithEmptyPropertiesFile",
+    []() {
+      // Create an empty properties file
+      removeTestSandbox();
+      createDirectory();
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties", "");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+
+      // Should succeed but not discover devices with empty properties
+      ASSERT_EQ(result, 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, IsRegularFileInvalidPath) {
-  std::string invalid_path = "/invalid/path/to/file";
-  bool is_reg = false;
-  int result = isRegularFile(invalid_path, &is_reg);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_FALSE(is_reg); // Expect is_reg to be false
+TEST(AltRsmiTest, ARSMIInitWithDirectoryInsteadOfPropertiesFile) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithDirectoryInsteadOfPropertiesFile",
+    []() {
+      // Create a directory instead of properties file
+      removeTestSandbox();
+      createDirectory();
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createDirectory("0/properties");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+
+      // Should handle this gracefully
+      ASSERT_EQ(result, 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, IsNumberInvalidInput) {
-  ASSERT_FALSE(isNumber("abc123")); // Non-numeric string
-  ASSERT_FALSE(isNumber(""));       // Empty string
-  ASSERT_FALSE(isNumber(" "));      // Whitespace string
+TEST(AltRsmiTest, ARSMIInitWithMissingVendorId) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithMissingVendorId",
+    []() {
+      // Create node without vendor_id
+      removeTestSandbox();
+      createDirectory();
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties", "unique_id 12345\n"
+                                 "location_id 23552\n"
+                                 "domain 0\n");
+                                 // Missing vendor_id
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0);
+
+      // Should not discover devices without vendor_id
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenNodeFileInvalidPath) {
-  std::ifstream fs;
-  int result = openNodeFile(9999, "invalid_file", &fs);
-  ASSERT_NE(result, 0);       // Expect non-zero error code
-  ASSERT_FALSE(fs.is_open()); // File stream should not be open
+TEST(AltRsmiTest, ARSMIInitWithNonAMDVendorId) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithNonAMDVendorId",
+    []() {
+      // Create node with non-AMD vendor_id
+      removeTestSandbox();
+      createDirectory();
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties", "unique_id 12345\n"
+                                 "location_id 23552\n"
+                                 "domain 0\n"
+                                 "vendor_id 0x10DE\n"); // NVIDIA vendor ID
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      int result = ARSMI_init();
+      ASSERT_EQ(result, 0);
+
+      // Should not discover non-AMD devices
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenNodeFileNotRegularFile) {
-  removeFile("/tmp/test_kfd/topology/nodes/0/properties");
+TEST(AltRsmiTest, ARSMIInitWithEmptyLinkPropertiesFile) {
+  RUN_ISOLATED_TEST(
+    "ARSMIInitWithEmptyLinkPropertiesFile",
+    []() {
+      setupTestEnvironment();
 
-  // Create a directory instead of a regular file
-  createDirectory("/tmp/test_kfd/topology/nodes/0/properties");
+      // Create setup but with empty link properties
+      createFile("0/io_links/0/properties", "");
 
-  std::ifstream fs;
-  int result = openNodeFile(0, "properties", &fs);
+      int result = ARSMI_init();
 
-  // Verify that the function returns ENOENT
-  ASSERT_EQ(result, ENOENT);
+      // Should still initialize, just skip that link
+      ASSERT_EQ(result, 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_GT(num_devices, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenNodeFileInvalidNodeFile) {
-  uint32_t invalid_dev_id = 9999; // Device ID that doesn't exist
-  std::ifstream fs;
-  int result =
-      openNodeFile(invalid_dev_id, "invalid_file", &fs);
-  ASSERT_NE(result, 0);       // Expect non-zero error code
-  ASSERT_FALSE(fs.is_open()); // File stream should not be open
+TEST(AltRsmiTest, NullInfoPointer) {
+  RUN_ISOLATED_TEST(
+    "NullInfoPointer",
+    []() {
+      setupTestEnvironment();
+
+      int result = ARSMI_topo_get_link_info(0, 1, nullptr);
+      ASSERT_EQ(result, EINVAL); // Expect EINVAL for null `info` pointer
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, CountIoLinksInvalidDeviceId) {
-  uint32_t invalid_dev_id = 9999; // Device ID that doesn't exist
-  int result = countIoLinks(invalid_dev_id);
-  ASSERT_EQ(result, 0); // Expect 0 links for an invalid device
+TEST(AltRsmiTest, SourceDeviceIndexOutOfRange) {
+  RUN_ISOLATED_TEST(
+    "SourceDeviceIndexOutOfRange",
+    []() {
+      setupTestEnvironment();
+
+      ARSMI_linkInfo info;
+      // First initialize
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      int result = ARSMI_topo_get_link_info(999, 1, &info); // Invalid source index
+      ASSERT_EQ(result, EINVAL); // Expect EINVAL for out-of-range source index
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenLinkFileInvalidLinkFile) {
-  uint32_t invalid_dev_id = 9999;    // Device ID that doesn't exist
-  uint32_t invalid_target_id = 9999; // Target ID that doesn't exist
-  std::ifstream fs;
-  int result = openLinkFile(invalid_dev_id, invalid_target_id,
-                                             "invalid_file", &fs);
-  ASSERT_NE(result, 0);       // Expect non-zero error code
-  ASSERT_FALSE(fs.is_open()); // File stream should not be open
+TEST(AltRsmiTest, DestinationDeviceIndexOutOfRange) {
+  RUN_ISOLATED_TEST(
+    "DestinationDeviceIndexOutOfRange",
+    []() {
+      setupTestEnvironment();
+
+      ARSMI_linkInfo info;
+      // First initialize
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      int result = ARSMI_topo_get_link_info(0, 999, &info); // Invalid destination index
+      ASSERT_EQ(result, EINVAL); // Expect EINVAL for out-of-range destination index
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenLinkFileInvalidPath) {
-  std::ifstream fs;
-  int result = openLinkFile(9999, 9999, "invalid_file", &fs);
-  ASSERT_NE(result, 0);       // Expect non-zero error code
-  ASSERT_FALSE(fs.is_open()); // File stream should not be open
+TEST(AltRsmiTest, LinkInfoAutoInitializes) {
+  RUN_ISOLATED_TEST(
+    "LinkInfoAutoInitializes",
+    []() {
+      setupTestEnvironment();
+
+      // Test that ARSMI_topo_get_link_info auto-initializes if not already initialized
+      ARSMI_linkInfo info;
+      int result = ARSMI_topo_get_link_info(0, 0, &info);
+
+      // Should succeed - auto-initialization should work with test data
+      ASSERT_EQ(result, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, OpenLinkFileNotRegularFile) {
-  removeFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties");
+TEST(AltRsmiTest, ValidLinkInfoBetweenDevices) {
+  RUN_ISOLATED_TEST(
+    "ValidLinkInfoBetweenDevices",
+    []() {
+      setupTestEnvironment();
 
-  // Create a directory instead of a regular file
-  createDirectory("/tmp/test_kfd/topology/nodes/0/io_links/1/properties");
+      // Initialize the system
+      ASSERT_EQ(ARSMI_init(), 0);
 
-  std::ifstream fs;
-  int result = openLinkFile(0, 1, "properties", &fs);
+      ARSMI_linkInfo info;
+      int result = ARSMI_topo_get_link_info(0, 1, &info);
 
-  // Verify that the function returns ENOENT
-  ASSERT_EQ(result, ENOENT);
+      // Should succeed
+      ASSERT_EQ(result, 0);
+
+      // Verify link info contains reasonable values
+      ASSERT_EQ(info.src_node, 0);
+      ASSERT_EQ(info.dst_node, 1);
+      // Type should be XGMI (type 11 in properties)
+      ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_XGMI);
+      ASSERT_EQ(info.hops, 1);
+      ASSERT_EQ(info.weight, 21);
+      ASSERT_EQ(info.min_bandwidth, 0);
+      ASSERT_EQ(info.max_bandwidth, 50000);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, GetGpuIdInvalidNode) {
-  uint64_t gpu_id = 0;
-  int result = getGpuId(9999, &gpu_id);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_EQ(gpu_id, 0); // GPU ID should not be modified
+TEST(AltRsmiTest, ValidLinkInfoSelfLink) {
+  RUN_ISOLATED_TEST(
+    "ValidLinkInfoSelfLink",
+    []() {
+      setupTestEnvironment();
+
+      // Initialize the system
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      ARSMI_linkInfo info;
+      int result = ARSMI_topo_get_link_info(0, 0, &info);
+
+      // Should succeed - even self-links should return default values
+      ASSERT_EQ(result, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, GetGpuIdInvalidId) {
-  uint64_t *gpu_id = nullptr;
-  int result = getGpuId(9999, gpu_id);
-  ASSERT_NE(result, 0); // Expect non-zero error code
+// TODO(alt_rsmi.cc): The current behavior of ARSMI_topo_get_link_info is questionable.
+// When no direct link exists between devices, it silently returns success with
+// fabricated default values (PCIe, 2 hops, weight 40). This can mislead callers
+// into thinking a real link exists. The implementation should return an error
+// code (e.g., ENOENT) when no link is defined. Once fixed, this test should be
+// updated to verify the new behavior.
+TEST(AltRsmiTest, LinkInfoWithNoDirectConnection) {
+  RUN_ISOLATED_TEST(
+    "LinkInfoWithNoDirectConnection",
+    []() {
+      // Setup with 2 nodes where they don't have direct XGMI connection
+      removeTestSandbox();
+      createDirectory();
+
+      // Create node 0
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties",
+                 "unique_id 100\n"
+                 "location_id 23552\n"
+                 "domain 0\n"
+                 "vendor_id 4098\n");
+      // Create empty io_links directory (no actual links defined)
+      createDirectory("0/io_links");
+
+      // Create node 1
+      createDirectory("1");
+      createFile("1/gpu_id", "4098\n");
+      createFile("1/properties",
+                 "unique_id 101\n"
+                 "location_id 23553\n"
+                 "domain 1\n"
+                 "vendor_id 4098\n");
+      // Create empty io_links directory (no actual links defined)
+      createDirectory("1/io_links");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 2);
+
+      // Try to get link info between the two devices (no direct link defined)
+      ARSMI_linkInfo info;
+      int result = ARSMI_topo_get_link_info(0, 1, &info);
+
+      // Should succeed but return default values since no io_links are defined
+      ASSERT_EQ(result, 0);
+
+      // When no direct link exists, src_node and dst_node remain as UINT_MAX
+      ASSERT_EQ(info.src_node, std::numeric_limits<unsigned>::max());
+      ASSERT_EQ(info.dst_node, std::numeric_limits<unsigned>::max());
+
+      // Default values set
+      ASSERT_EQ(info.hops, 2); // Default hops
+      ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_PCIEXPRESS); // Default type
+      ASSERT_EQ(info.weight, 40); // Default weight
+      ASSERT_EQ(info.min_bandwidth, 0); // Default min_bandwidth
+      ASSERT_EQ(info.max_bandwidth, 0); // Default max_bandwidth
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ReadGpuIdInvalidNode) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  uint64_t gpu_id = 0;
-  int result = readGpuId(invalid_node_id, &gpu_id);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_EQ(gpu_id, 0); // GPU ID should not be modified
+TEST(AltRsmiTest, MultipleDevicesWithXGMILinks) {
+  RUN_ISOLATED_TEST(
+    "MultipleDevicesWithXGMILinks",
+    []() {
+      setupTestEnvironment();
+
+      // Test XGMI link type (type 11)
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 2);
+
+      // Get link info for XGMI connection
+      ARSMI_linkInfo info;
+      ASSERT_EQ(ARSMI_topo_get_link_info(0, 1, &info), 0);
+
+      // Verify XGMI properties
+      ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_XGMI);
+      ASSERT_EQ(info.hops, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, ReadGpuIdInvalidData) {
-  // Create the directory structure
-  removeDirectory("/tmp/test_kfd");
-  createDirectory("/tmp/test_kfd/topology/nodes/0");
+TEST(AltRsmiTest, LinkTypeUndefined) {
+  RUN_ISOLATED_TEST(
+    "LinkTypeUndefined",
+    []() {
+      setupTestEnvironment();
 
-  // Create a gpu_id file with invalid (non-numeric) data
-  std::ofstream gpu_id_file("/tmp/test_kfd/topology/nodes/0/gpu_id");
-  gpu_id_file << "invalid_gpu_id"; // Non-numeric data
-  gpu_id_file.close();
+      // Remove existing links and create setup with only undefined link type
+      removeFile("0/io_links/0/properties");
+      removeFile("0/io_links/1/properties");
+      removeFile("1/io_links/0/properties");
+      removeFile("1/io_links/1/properties");
 
-  uint64_t gpu_id = 0;
+      // Create link with undefined type (must be read last to not be overwritten)
+      createDirectory("0/io_links/2");
+      createFile("0/io_links/2/properties",
+                 "type 99\n"  // Undefined type (not 2 or 11)
+                 "version_major 0\n"
+                 "version_minor 0\n"
+                 "node_from 0\n"
+                 "node_to 1\n"
+                 "weight 21\n"
+                 "min_latency 0\n"
+                 "max_latency 0\n"
+                 "min_bandwidth 0\n"
+                 "max_bandwidth 50000\n"
+                 "recommended_transfer_size 0\n"
+                 "recommended_sdma_engine_id_mask 0\n"
+                 "flags 0\n");
 
-  // Call the readGpuId function
-  int result = readGpuId(0, &gpu_id);
+      ASSERT_EQ(ARSMI_init(), 0);
 
-  // Verify that the function returns ENXIO
-  ASSERT_EQ(result, ENXIO);
+      ARSMI_linkInfo info;
+      ASSERT_EQ(ARSMI_topo_get_link_info(0, 1, &info), 0);
+
+      // Should have undefined type
+      ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_UNDEFINED);
+      ASSERT_EQ(info.hops, 0);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, IsNodeSupportedInvalidNode) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  bool result = isNodeSupported(invalid_node_id);
-  ASSERT_FALSE(result); // Expect false for unsupported node
+TEST(AltRsmiTest, DeviceOrderingByBDF) {
+  RUN_ISOLATED_TEST(
+    "DeviceOrderingByBDF",
+    []() {
+      setupTestEnvironment();
+
+      // Test that devices are ordered by BDF correctly
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 2);
+
+      // Get BDF for both devices
+      uint64_t bdf0 = 0, bdf1 = 0;
+      ASSERT_EQ(ARSMI_dev_pci_id_get(0, &bdf0), 0);
+      ASSERT_EQ(ARSMI_dev_pci_id_get(1, &bdf1), 0);
+
+      // BDFs should be ordered (lower BDF first)
+      // Based on test data: node0 (domain=0, location_id=23552) comes before
+      // node1 (domain=1, location_id=23553)
+      ASSERT_LT(bdf0, bdf1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, IsNodeSupportedEmptyFile) {
-  // Create an empty properties file
-  std::ofstream properties_file("/tmp/test_kfd/topology/nodes/0/properties");
-  properties_file.close();
+TEST(AltRsmiTest, FileExistsCheck) {
+  RUN_ISOLATED_TEST(
+    "FileExistsCheck",
+    []() {
+      // Test fileExists() indirectly by verifying behavior when files don't exist
+      // This covers the fileExists(char const*) internal function
 
-  // Call the isNodeSupported function
-  bool result = isNodeSupported(0);
+      removeTestSandbox();
+      createDirectory();
 
-  // Verify that the function returns false for an empty file
-  ASSERT_FALSE(result);
+      // Scenario 1: Node with missing gpu_id file - should be skipped
+      createDirectory("0");
+      // Don't create gpu_id file - fileExists() will return false for it
+      createFile("0/properties",
+                 "unique_id 100\n"
+                 "location_id 23552\n"
+                 "domain 0\n"
+                 "vendor_id 4098\n");
+      createDirectory("0/io_links");
+
+      // Scenario 2: Node with missing properties file - should be skipped
+      createDirectory("1");
+      createFile("1/gpu_id", "4098\n");
+      // Don't create properties file - fileExists() will return false for it
+      createDirectory("1/io_links");
+
+      // Scenario 3: Complete valid node
+      createDirectory("2");
+      createFile("2/gpu_id", "4098\n");
+      createFile("2/properties",
+                 "unique_id 102\n"
+                 "location_id 23554\n"
+                 "domain 2\n"
+                 "vendor_id 4098\n");
+      createDirectory("2/io_links");
+
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
+
+      ASSERT_EQ(ARSMI_init(), 0);
+
+      // Only the complete node should be discovered (fileExists filtered out the others)
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 1);
+
+      cleanupTestEnvironment();
+    }
+  );
 }
 
-TEST_F(AltRsmiTest, GetPropertyValueInvalidProperty) {
-  std::map<std::string, uint64_t> properties = {{"valid_property", 12345}};
-  uint64_t value = 0;
-  int result =
-      getPropertyValue("invalid_property", &value, properties);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_EQ(value, 0);  // Value should not be modified
-}
+TEST(AltRsmiTest, BDFSortingLambda) {
+  RUN_ISOLATED_TEST(
+    "BDFSortingLambda",
+    []() {
+      // Test the BDF sorting lambda comparator in ARSMI_init()
+      // The lambda at line 183-186 sorts devices with the SAME unique_id by BDF
+      // Create multiple partitions (same unique_id) with different BDF values in REVERSE order
+      removeTestSandbox();
+      createDirectory();
 
-TEST_F(AltRsmiTest, GetPropertyValueNullValuePointer) {
-  std::map<std::string, uint64_t> properties = {{"key1", 12345}};
-  uint64_t *value = nullptr;
+      // Create 4 nodes with the SAME unique_id but different location_ids (which affects BDF)
+      // to exercise the lambda that sorts within the same unique_id group
+      const std::string same_unique_id = "12345678901234567890";
 
-  // Call the function with a null value pointer
-  int result = getPropertyValue("key1", value, properties);
+      // Node 0: Highest BDF (will need to be moved to end by lambda)
+      createDirectory("0");
+      createFile("0/gpu_id", "4098\n");
+      createFile("0/properties",
+                 "unique_id " + same_unique_id + "\n"
+                 "location_id 4294967040\n"  // Very high value for high BDF
+                 "domain 3\n"
+                 "vendor_id 4098\n");
+      createDirectory("0/io_links");
 
-  // Verify that the function returns EINVAL
-  ASSERT_EQ(result, EINVAL);
-}
+      // Node 1: Second highest BDF
+      createDirectory("1");
+      createFile("1/gpu_id", "4098\n");
+      createFile("1/properties",
+                 "unique_id " + same_unique_id + "\n"
+                 "location_id 16777216\n"
+                 "domain 2\n"
+                 "vendor_id 4098\n");
+      createDirectory("1/io_links");
 
-TEST_F(AltRsmiTest, GetPropertyValueEmptyPropertiesMap) {
-  std::map<std::string, uint64_t> properties; // Empty map
-  uint64_t value = 0;
+      // Node 2: Second lowest BDF
+      createDirectory("2");
+      createFile("2/gpu_id", "4098\n");
+      createFile("2/properties",
+                 "unique_id " + same_unique_id + "\n"
+                 "location_id 65536\n"
+                 "domain 1\n"
+                 "vendor_id 4098\n");
+      createDirectory("2/io_links");
 
-  // Call the function with an empty properties map
-  int result = getPropertyValue("key1", &value, properties);
+      // Node 3: Lowest BDF (should be sorted to first by lambda)
+      createDirectory("3");
+      createFile("3/gpu_id", "4098\n");
+      createFile("3/properties",
+                 "unique_id " + same_unique_id + "\n"
+                 "location_id 256\n"
+                 "domain 0\n"
+                 "vendor_id 4098\n");
+      createDirectory("3/io_links");
 
-  // Verify that the function returns EINVAL
-  ASSERT_EQ(result, EINVAL);
-}
+      AltRsmiTestUtils::ResetState();
+      AltRsmiTestUtils::SetNodesPath(kTestKFDPath);
 
-TEST_F(AltRsmiTest, GetPropertyValueKeyNotFound) {
-  std::map<std::string, uint64_t> properties = {{"key1", 12345}};
-  uint64_t value = 0;
+      ASSERT_EQ(ARSMI_init(), 0);
 
-  // Call the function with a key that does not exist in the map
-  int result = getPropertyValue("key2", &value, properties);
+      // All 4 nodes have the same unique_id, so they're all partitions of the same device
+      // ARSMI_num_devices counts unique devices, but ARSMI_orderedNodes has all partitions
+      uint32_t num_devices = 0;
+      ASSERT_EQ(ARSMI_get_num_devices(&num_devices), 0);
+      ASSERT_EQ(num_devices, 4);  // All 4 partitions should be counted
 
-  // Verify that the function returns EINVAL
-  ASSERT_EQ(result, EINVAL);
-}
+      // Access ARSMI_orderedNodes directly to verify the lambda sorted by s_bdf
+      ASSERT_EQ(ARSMI_orderedNodes.size(), 4);
 
-TEST_F(AltRsmiTest, FileExistsInvalidPath) {
-  const char *invalid_path = "/invalid/path/to/file";
-  bool result = fileExists(invalid_path);
-  ASSERT_FALSE(result); // Expect false for non-existent file
-}
+      // The lambda should have sorted these by s_bdf within the unique_id group
+      // Verify ascending order
+      ASSERT_LT(ARSMI_orderedNodes[0].s_bdf, ARSMI_orderedNodes[1].s_bdf);
+      ASSERT_LT(ARSMI_orderedNodes[1].s_bdf, ARSMI_orderedNodes[2].s_bdf);
+      ASSERT_LT(ARSMI_orderedNodes[2].s_bdf, ARSMI_orderedNodes[3].s_bdf);
 
-TEST_F(AltRsmiTest, ARSMIReadDevicePropertiesInvalidNode) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  int result =
-      ARSMI_readDeviceProperties(invalid_node_id, properties);
-  ASSERT_NE(result, 0);            // Expect non-zero error code
-  ASSERT_TRUE(properties.empty()); // Properties map should remain empty
-}
+      // Verify the sort reordered them: node 3 should be first (lowest BDF)
+      ASSERT_EQ(ARSMI_orderedNodes[0].s_node_id, 3);  // Node 3 has domain 0, location 256
+      ASSERT_EQ(ARSMI_orderedNodes[1].s_node_id, 2);  // Node 2 has domain 1, location 65536
+      ASSERT_EQ(ARSMI_orderedNodes[2].s_node_id, 1);  // Node 1 has domain 2, location 16777216
+      ASSERT_EQ(ARSMI_orderedNodes[3].s_node_id, 0);  // Node 0 has domain 3, location 4294967040
 
-TEST_F(AltRsmiTest, ARSMI_readDevicePropertiesNotRegularFile) {
-  // Clean up
-  removeFile("/tmp/test_kfd/topology/nodes/0/properties");
+      // Verify they all have the same unique_id
+      ASSERT_EQ(ARSMI_orderedNodes[0].s_unique_id, ARSMI_orderedNodes[1].s_unique_id);
+      ASSERT_EQ(ARSMI_orderedNodes[1].s_unique_id, ARSMI_orderedNodes[2].s_unique_id);
+      ASSERT_EQ(ARSMI_orderedNodes[2].s_unique_id, ARSMI_orderedNodes[3].s_unique_id);
 
-  // Create a directory instead of a regular file
-  createDirectory("/tmp/test_kfd/topology/nodes/0/properties");
-
-  std::map<std::string, uint64_t> properties = {{"unique_id", 12345},
-                                                {"location_id", 67890}};
-
-  std::ifstream fs;
-  int result = ARSMI_readDeviceProperties(0, properties);
-
-  // Verify that the function returns ENOENT
-  ASSERT_EQ(result, ENOENT);
-}
-
-TEST_F(AltRsmiTest, ARSMI_readDevicePropertiesEmptyFile) {
-  createFile("/tmp/test_kfd/topology/nodes/0/properties", "");
-
-  std::map<std::string, uint64_t> properties;
-
-  std::ifstream fs;
-  int result = ARSMI_readDeviceProperties(0, properties);
-
-  // Verify that the function handles empty lines correctly
-  ASSERT_EQ(result, ENOENT);
-}
-
-TEST_F(AltRsmiTest, ARSMI_readDevicePropertiesTrailingEmptyLines) {
-  createFile("/tmp/test_kfd/topology/nodes/0/properties", "key1 101\n"
-                                                          "key2 102\n"
-                                                          "  \n"
-                                                          "\n");
-
-  std::map<std::string, uint64_t> properties;
-
-  std::ifstream fs;
-  int result = ARSMI_readDeviceProperties(0, properties);
-
-  // Verify that the function handles empty lines correctly
-  ASSERT_EQ(result, 0);
-}
-
-TEST_F(AltRsmiTest, ARSMIReadLinkPropertiesInvalidLink) {
-  uint32_t invalid_node_id = 9999;   // Node ID that doesn't exist
-  uint32_t invalid_target_id = 9999; // Target ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  int result = ARSMI_readLinkProperties(
-      invalid_node_id, invalid_target_id, properties);
-  ASSERT_NE(result, 0);            // Expect non-zero error code
-  ASSERT_TRUE(properties.empty()); // Properties map should remain empty
-}
-
-TEST_F(AltRsmiTest, ARSMI_readLinkPropertiesNotRegularFile) {
-  // Clean up
-  removeFile("/tmp/test_kfd/topology/nodes/0/io_links/1/properties");
-
-  // Create a directory instead of a regular file
-  createDirectory("/tmp/test_kfd/topology/nodes/0/properties");
-
-  std::map<std::string, uint64_t> properties = {{"unique_id", 12345},
-                                                {"location_id", 67890}};
-
-  std::ifstream fs;
-  int result = ARSMI_readLinkProperties(0, 1, properties);
-
-  // Verify that the function returns ENOENT
-  ASSERT_EQ(result, ENOENT);
-
-  // Clean up
-  rmdir("/tmp/test_kfd/0/io_links/1/properties");
-}
-
-TEST_F(AltRsmiTest, ARSMI_readLinkPropertiesTrailingEmptyLine) {
-
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/0/properties",
-             "key1 101\n"
-             "key2 102\n"
-             "  \n");
-
-  std::map<std::string, uint64_t> properties;
-
-  std::ifstream fs;
-  int result = ARSMI_readLinkProperties(0, 0, properties);
-
-  // Verify that the function handles empty lines correctly
-  ASSERT_EQ(result, 0);
-}
-
-TEST_F(AltRsmiTest, ARSMI_readLinkPropertiesEmptyFile) {
-  createFile("/tmp/test_kfd/topology/nodes/0/io_links/0/properties", "");
-
-  std::map<std::string, uint64_t> properties;
-
-  std::ifstream fs;
-  int result = ARSMI_readLinkProperties(0, 0, properties);
-
-  ASSERT_EQ(result, ENOENT);
-}
-
-TEST_F(AltRsmiTest, ReadNodePropertiesInvalidProperty) {
-  std::map<std::string, uint64_t> properties = {{"unique_id", 12345},
-                                                {"location_id", 67890}};
-  uint64_t value = 0;
-
-  // Call the wrapper function with an invalid property name
-  int result = read_node_properties(0, "invalid_property",
-                                                     &value, properties);
-
-  // Verify that the function fails for an invalid property name
-  ASSERT_NE(result, 0);
-}
-
-TEST_F(AltRsmiTest, ReadNodePropertiesInvalidNode) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  uint64_t value = 0;
-  int result = read_node_properties(
-      invalid_node_id, "valid_property", &value, properties);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_EQ(value, 0);  // Value should not be modified
-}
-
-TEST_F(AltRsmiTest, ReadNodePropertiesInvalidPropertyValue) {
-  uint32_t invalid_node_id = 9999; // Node ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  uint64_t *value = nullptr;
-  int result = read_node_properties(invalid_node_id, "", value,
-                                                     properties);
-  ASSERT_EQ(result, EINVAL); // Expect non-zero error code
-}
-
-TEST_F(AltRsmiTest, ReadLinkPropertiesInvalidLink) {
-  uint32_t invalid_node_id = 9999;   // Node ID that doesn't exist
-  uint32_t invalid_target_id = 9999; // Target ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  uint64_t value = 0;
-  int result = read_link_properties(
-      invalid_node_id, invalid_target_id, "valid_property", &value, properties);
-  ASSERT_NE(result, 0); // Expect non-zero error code
-  ASSERT_EQ(value, 0);  // Value should not be modified
-}
-
-TEST_F(AltRsmiTest, ReadLinkPropertiesInvalidPropertyValue) {
-  uint32_t invalid_node_id = 9999;   // Node ID that doesn't exist
-  uint32_t invalid_target_id = 9999; // Target ID that doesn't exist
-  std::map<std::string, uint64_t> properties;
-  uint64_t *value = nullptr;
-  int result = read_link_properties(
-      invalid_node_id, invalid_target_id, "", value, properties);
-  ASSERT_EQ(result, EINVAL); // Expect non-zero error code
-}
-
-TEST_F(AltRsmiTest, NullInfoPointer) {
-  int result = ARSMI_topo_get_link_info(0, 1, nullptr);
-  ASSERT_EQ(result, EINVAL); // Expect EINVAL for null `info` pointer
-}
-
-TEST_F(AltRsmiTest, SourceDeviceIndexOutOfRange) {
-  ARSMI_linkInfo info;
-  ARSMI_num_devices =
-      2; // Simulate initialized state with two devices
-  int result = ARSMI_topo_get_link_info(999, 1, &info); // Invalid source index
-  ASSERT_EQ(result, EINVAL); // Expect EINVAL for out-of-range source index
-}
-
-TEST_F(AltRsmiTest, DestinationDeviceIndexOutOfRange) {
-  ARSMI_linkInfo info;
-  ARSMI_num_devices =
-      2; // Simulate initialized state with two devices
-  int result =
-      ARSMI_topo_get_link_info(0, 999, &info); // Invalid destination index
-  ASSERT_EQ(result, EINVAL); // Expect EINVAL for out-of-range destination index
-}
-
-TEST_F(AltRsmiTest, UninitializedNumDevices) {
-
-  kKFDNodesPathRoot =
-      "/tmp/invalid_path"; // Simulate invalid path
-
-  ARSMI_linkInfo info;
-  ARSMI_num_devices = -1; // Simulate uninitialized state
-  int result = ARSMI_topo_get_link_info(0, 0, &info);
-  ASSERT_NE(result, 0); // Expect non-zero error code for uninitialized state
-}
-
-TEST_F(AltRsmiTest, InvalidLinkInfo) {
-
-  // Initialize ARSMI_orderedLinks with data not in order
-  ARSMI_orderedLinks = {
-      {
-          {1, 0, 0, ARSMI_IOLINK_TYPE_UNDEFINED, 0, 0,
-           0}, // No link from Device 1 to itself
-          {1, 0, 1, ARSMI_IOLINK_TYPE_PCIEXPRESS, 40, 1000, 2000}
-          // Link from Device 1 to Device 0
-      },
-      {
-          {0, 1, 1, ARSMI_IOLINK_TYPE_PCIEXPRESS, 40, 1000,
-           2000}, // Link from Device 0 to Device 1
-          {0, 0, 0, ARSMI_IOLINK_TYPE_UNDEFINED, 0, 0, 0}
-          // No link from Device 0 to itself
-      }};
-
-  // Leave ARSMI_orderedLinks uninitialized
-  ARSMI_linkInfo info;
-  int result = ARSMI_topo_get_link_info(0, 1, &info);
-  ASSERT_EQ(info.hops, 2); // Expect default values for uninitialized link info
-  ASSERT_EQ(info.type, ARSMI_IOLINK_TYPE_PCIEXPRESS);
-  ASSERT_EQ(info.weight, 40);
-  ASSERT_EQ(info.min_bandwidth, 0);
-  ASSERT_EQ(info.max_bandwidth, 0);
+      cleanupTestEnvironment();
+    }
+  );
 }
 
 } // namespace RcclUnitTesting
