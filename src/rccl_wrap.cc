@@ -509,7 +509,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
 
 bool rcclWarpSpeedSupported(struct ncclComm* comm, struct ncclKernelPlan* plan) {
   if (!comm->topo->warpSpeedEnabled) {
-    return 0;
+    return false;
   }
 
   // WarpSpeed is not supported currently for the following cases:
@@ -525,7 +525,7 @@ bool rcclWarpSpeedSupported(struct ncclComm* comm, struct ncclKernelPlan* plan) 
     }
     task = task->next;
   }
-  return (hasP2p || hasNonRing) ? 0 : 1;
+  return (!hasP2p && !hasNonRing);
 }
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
