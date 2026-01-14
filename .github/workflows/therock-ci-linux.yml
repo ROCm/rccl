@@ -9,6 +9,33 @@ on:
         type: string
       extra_cmake_options:
         type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: "AMDGPU families to build/test (e.g. gfx94X-dcgpu)"
+        type: string
+        required: true
+        default: gfx94X-dcgpu
+      artifact_group:
+        description: "Artifact group name used for upload and downstream tests"
+        type: string
+        required: true
+        default: gfx94X-dcgpu
+      extra_cmake_options:
+        description: "Extra CMake options passed to the configure step"
+        type: string
+        required: false
+        default: >-
+          -DTHEROCK_ENABLE_ALL=OFF
+          -DTHEROCK_BUILD_TESTING=ON
+          -DTHEROCK_BUNDLE_SYSDEPS=ON
+          -DTHEROCK_ENABLE_COMM_LIBS=ON
+          -DTHEROCK_ENABLE_ROCPROFV3=ON
+          -DTHEROCK_USE_EXTERNAL_RCCL=ON
+          -DTHEROCK_USE_EXTERNAL_RCCL_TESTS=ON
+          -DTHEROCK_RCCL_SOURCE_DIR=./rccl
+          -DTHEROCK_RCCL_TESTS_SOURCE_DIR=./rccl-tests
+          -DTHEROCK_ENABLE_MPI=ON
 
 permissions:
   contents: read
@@ -123,7 +150,7 @@ jobs:
 
   therock-test-linux-multi-node:
     name: "Test multi-node"
-    if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
+    if: ${{ github.event_name == 'workflow_call' && inputs.amdgpu_families == 'gfx950-dcgpu' }}
     permissions:
       contents: read
       id-token: write
@@ -137,11 +164,25 @@ jobs:
 
   therock-test-linux-single-node:
     name: "Test single-node"
-    if: ${{ inputs.amdgpu_families == 'gfx94X-dcgpu' }}
+    if: ${{ github.event_name == 'workflow_call' && inputs.amdgpu_families == 'gfx94X-dcgpu' }}
     needs: [therock-build-linux]
     uses: ./.github/workflows/therock-test-packages-single-node.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       artifact_group: ${{ inputs.artifact_group }}
       test_runs_on: linux-mi325-1gpu-ossci-rocm-frac
+      artifact_run_id: ${{ github.run_id }}
+
+  therock-4N-mi325-multi-node-test:
+    name: Test heatmap multi-node
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.amdgpu_families == 'gfx94X-dcgpu' }}
+    permissions:
+      contents: read
+      id-token: write
+    needs: [therock-build-linux]
+    uses: ./.github/workflows/therock-4nic-heatmap-tests.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
+      test_runs_on: linux-vultr-mi325-scale-runner
       artifact_run_id: ${{ github.run_id }}
