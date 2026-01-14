@@ -27,42 +27,23 @@ typedef void (*ncclDevFuncPtr_t)();
 // Skip these extern declarations in self-contained mode (NCCL_DEFINE_SHMEM)
 // because each kernel file only defines its own type's tables
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__) && !defined(NCCL_DEFINE_SHMEM)
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_4[];
+
+// Define the list of types once
+#define NCCL_TYPES(X) \
+  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
+  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
+
+// Generate declarations
+#define DECLARE_TYPE(type) \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_1[]; \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_2[]; \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_4[];
+
+NCCL_TYPES(DECLARE_TYPE)
+
+#undef DECLARE_TYPE
+#undef NCCL_TYPES
+
 #endif
 
 // Type-specific caller functions are defined inline in device_table.h
@@ -800,95 +781,43 @@ __global__ void ncclDevKernelDebug_Generic_4(ncclDevKernelArgsDefaultStorage NCC
 #endif // BUILD_GENERIC_KERNELS
 
 // Type+Algorithm-specific kernel declarations
-// Ring algorithm kernels (RING-based collectives)
-__global__ void ncclDevKernel_i8_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i8_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i8_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_ring_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_ring_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_ring_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
+// Use X-macros to generate declarations for all types, algorithms, and unroll factors
 
-// Tree algorithm kernels (TREE and PAT-based collectives)
-__global__ void ncclDevKernel_i8_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i8_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i8_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u8_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i32_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u32_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_i64_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_u64_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f16_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f32_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f64_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_bf16_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e4m3_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_tree_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_tree_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
-__global__ void ncclDevKernel_f8e5m2_tree_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
+#define NCCL_TYPES(X) \
+  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
+  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
+
+#define NCCL_ALGOS(X) X(ring) X(tree)
+
+#define NCCL_UNROLLS(X) X(1) X(2) X(4)
+
+#define DECLARE_KERNEL(type, algo, unroll) \
+  __global__ void ncclDevKernel_##type##_##algo##_##unroll(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const args);
+
+#define DECLARE_KERNEL_UNROLLS(type, algo) \
+  DECLARE_KERNEL(type, algo, 1) \
+  DECLARE_KERNEL(type, algo, 2) \
+  DECLARE_KERNEL(type, algo, 4)
+
+#define DECLARE_KERNEL_TYPE_ALGOS(type) \
+  DECLARE_KERNEL_UNROLLS(type, ring) \
+  DECLARE_KERNEL_UNROLLS(type, tree)
+
+NCCL_TYPES(DECLARE_KERNEL_TYPE_ALGOS)
+
+#undef DECLARE_KERNEL_TYPE_ALGOS
+#undef DECLARE_KERNEL_UNROLLS
+#undef DECLARE_KERNEL
+#undef NCCL_UNROLLS
+#undef NCCL_ALGOS
+#undef NCCL_TYPES
 
 #define DEFINE_ncclDevKernel_nop(suffix, coll, redop, ty, algo, proto, specializedFnId) \
   __global__ void ncclDevKernel_##suffix(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage) {}
 
-#ifdef USE_INDIRECT_FUNCTION_CALL
 #define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
   __device__ void ncclDevFunc_##suffix() { \
     RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
   }
-#else
-#define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto, acc, pipeline, unroll) \
-  __device__ void ncclDevFunc_##suffix() { \
-    RunWorkBatch<coll, ty, redop<ty>, algo, proto, acc, unroll, pipeline>().run(); \
-  }
-#endif
 
 #endif

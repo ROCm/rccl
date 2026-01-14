@@ -21,143 +21,76 @@ struct RunWorkNop {
 // Forward declarations for type-specific function tables
 // These are defined in the generated kernels_<type>_<algo>_<unroll>.cu files
 #if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__)
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i8_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u8_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_i64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_u64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f16_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f32_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f64_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_bf16_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e4m3_4[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_1[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_2[];
-extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_f8e5m2_4[];
+
+// Define the list of types once
+#define NCCL_TYPES(X) \
+  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
+  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
+
+// Generate declarations
+#define DECLARE_TYPE(type) \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_1[]; \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_2[]; \
+  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_4[];
+
+NCCL_TYPES(DECLARE_TYPE)
+
+#undef DECLARE_TYPE
+#undef NCCL_TYPES
+
 #endif
 
 #ifdef BUILD_GENERIC_KERNELS
 // Generic kernel that dispatches to type-specific device functions
 // Uses type-specific tables for efficient dispatch
 
-// Helper to call type-specific function tables based on funcId
-// Unroll-specific dispatch - no runtime branching on unroll factor
-__device__ __forceinline__ void callTypeSpecificFunction_1(int funcId)
-{
-    extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int typeIdx = ncclDevFuncIdToType[funcId];
+// Helper macro to generate type dispatch switch cases
+#define NCCL_TYPE_SWITCH_CASES(unroll) \
+    case 0: NCCL_CALL_FUNCTIONS_i8_##unroll(funcId); break; \
+    case 1: NCCL_CALL_FUNCTIONS_u8_##unroll(funcId); break; \
+    case 2: NCCL_CALL_FUNCTIONS_i32_##unroll(funcId); break; \
+    case 3: NCCL_CALL_FUNCTIONS_u32_##unroll(funcId); break; \
+    case 4: NCCL_CALL_FUNCTIONS_i64_##unroll(funcId); break; \
+    case 5: NCCL_CALL_FUNCTIONS_u64_##unroll(funcId); break; \
+    case 6: NCCL_CALL_FUNCTIONS_f16_##unroll(funcId); break; \
+    case 7: NCCL_CALL_FUNCTIONS_f32_##unroll(funcId); break; \
+    case 8: NCCL_CALL_FUNCTIONS_f64_##unroll(funcId); break; \
+    case 9: NCCL_CALL_FUNCTIONS_bf16_##unroll(funcId); break; \
+    case 10: NCCL_CALL_FUNCTIONS_f8e4m3_##unroll(funcId); break; \
+    case 11: NCCL_CALL_FUNCTIONS_f8e5m2_##unroll(funcId); break; \
+    default: NCCL_CALL_FUNCTIONS_i8_##unroll(funcId); break;
 
-    switch(typeIdx)
-    {
-        case 0: NCCL_CALL_FUNCTIONS_i8_1(funcId); break;
-        case 1: NCCL_CALL_FUNCTIONS_u8_1(funcId); break;
-        case 2: NCCL_CALL_FUNCTIONS_i32_1(funcId); break;
-        case 3: NCCL_CALL_FUNCTIONS_u32_1(funcId); break;
-        case 4: NCCL_CALL_FUNCTIONS_i64_1(funcId); break;
-        case 5: NCCL_CALL_FUNCTIONS_u64_1(funcId); break;
-        case 6: NCCL_CALL_FUNCTIONS_f16_1(funcId); break;
-        case 7: NCCL_CALL_FUNCTIONS_f32_1(funcId); break;
-        case 8: NCCL_CALL_FUNCTIONS_f64_1(funcId); break;
-        case 9: NCCL_CALL_FUNCTIONS_bf16_1(funcId); break;
-        case 10: NCCL_CALL_FUNCTIONS_f8e4m3_1(funcId); break;
-        case 11: NCCL_CALL_FUNCTIONS_f8e5m2_1(funcId); break;
-        default: NCCL_CALL_FUNCTIONS_i8_1(funcId); break;
-    }
+// Macro to define callTypeSpecificFunction for each unroll factor
+#define DEFINE_CALL_TYPE_SPECIFIC_FUNCTION(unroll) \
+__device__ __forceinline__ void callTypeSpecificFunction_##unroll(int funcId) \
+{ \
+    extern __device__ __constant__ unsigned char ncclDevFuncIdToType[]; \
+    int typeIdx = ncclDevFuncIdToType[funcId]; \
+    switch(typeIdx) { NCCL_TYPE_SWITCH_CASES(unroll) } \
 }
 
-__device__ __forceinline__ void callTypeSpecificFunction_2(int funcId)
-{
-    extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int typeIdx = ncclDevFuncIdToType[funcId];
+DEFINE_CALL_TYPE_SPECIFIC_FUNCTION(1)
+DEFINE_CALL_TYPE_SPECIFIC_FUNCTION(2)
+DEFINE_CALL_TYPE_SPECIFIC_FUNCTION(4)
 
-    switch(typeIdx)
-    {
-        case 0: NCCL_CALL_FUNCTIONS_i8_2(funcId); break;
-        case 1: NCCL_CALL_FUNCTIONS_u8_2(funcId); break;
-        case 2: NCCL_CALL_FUNCTIONS_i32_2(funcId); break;
-        case 3: NCCL_CALL_FUNCTIONS_u32_2(funcId); break;
-        case 4: NCCL_CALL_FUNCTIONS_i64_2(funcId); break;
-        case 5: NCCL_CALL_FUNCTIONS_u64_2(funcId); break;
-        case 6: NCCL_CALL_FUNCTIONS_f16_2(funcId); break;
-        case 7: NCCL_CALL_FUNCTIONS_f32_2(funcId); break;
-        case 8: NCCL_CALL_FUNCTIONS_f64_2(funcId); break;
-        case 9: NCCL_CALL_FUNCTIONS_bf16_2(funcId); break;
-        case 10: NCCL_CALL_FUNCTIONS_f8e4m3_2(funcId); break;
-        case 11: NCCL_CALL_FUNCTIONS_f8e5m2_2(funcId); break;
-        default: NCCL_CALL_FUNCTIONS_i8_2(funcId); break;
-    }
-}
+#undef DEFINE_CALL_TYPE_SPECIFIC_FUNCTION
+#undef NCCL_TYPE_SWITCH_CASES
 
-__device__ __forceinline__ void callTypeSpecificFunction_4(int funcId)
-{
-    extern __device__ __constant__ unsigned char ncclDevFuncIdToType[];
-    int typeIdx = ncclDevFuncIdToType[funcId];
-
-    switch(typeIdx)
-    {
-        case 0: NCCL_CALL_FUNCTIONS_i8_4(funcId); break;
-        case 1: NCCL_CALL_FUNCTIONS_u8_4(funcId); break;
-        case 2: NCCL_CALL_FUNCTIONS_i32_4(funcId); break;
-        case 3: NCCL_CALL_FUNCTIONS_u32_4(funcId); break;
-        case 4: NCCL_CALL_FUNCTIONS_i64_4(funcId); break;
-        case 5: NCCL_CALL_FUNCTIONS_u64_4(funcId); break;
-        case 6: NCCL_CALL_FUNCTIONS_f16_4(funcId); break;
-        case 7: NCCL_CALL_FUNCTIONS_f32_4(funcId); break;
-        case 8: NCCL_CALL_FUNCTIONS_f64_4(funcId); break;
-        case 9: NCCL_CALL_FUNCTIONS_bf16_4(funcId); break;
-        case 10: NCCL_CALL_FUNCTIONS_f8e4m3_4(funcId); break;
-        case 11: NCCL_CALL_FUNCTIONS_f8e5m2_4(funcId); break;
-        default: NCCL_CALL_FUNCTIONS_i8_4(funcId); break;
-    }
-}
-
-// Generic dispatchers - dispatch to type-specific tables
-struct GenericDispatcher_1
-{
-    static __device__ __forceinline__ void dispatch(int funcId, int unroll)
-    {
-        callTypeSpecificFunction_1(funcId);
-    }
+// Macro to define GenericDispatcher structs
+#define DEFINE_GENERIC_DISPATCHER(unroll) \
+struct GenericDispatcher_##unroll \
+{ \
+    static __device__ __forceinline__ void dispatch(int funcId, int /*unroll*/) \
+    { \
+        callTypeSpecificFunction_##unroll(funcId); \
+    } \
 };
 
-struct GenericDispatcher_2
-{
-    static __device__ __forceinline__ void dispatch(int funcId, int unroll)
-    {
-        callTypeSpecificFunction_2(funcId);
-    }
-};
+DEFINE_GENERIC_DISPATCHER(1)
+DEFINE_GENERIC_DISPATCHER(2)
+DEFINE_GENERIC_DISPATCHER(4)
 
-struct GenericDispatcher_4
-{
-    static __device__ __forceinline__ void dispatch(int funcId, int unroll)
-    {
-        callTypeSpecificFunction_4(funcId);
-    }
-};
+#undef DEFINE_GENERIC_DISPATCHER
 
 // Generic kernels - dispatch to type-specific tables at runtime
 __launch_bounds__(NCCL_MAX_NTHREADS, 1) __global__ void ncclDevKernel_Generic_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage) {
