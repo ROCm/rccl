@@ -910,20 +910,8 @@ foreach(kernel_file ${TYPE_KERNEL_FILES})
     ${HSA_INCLUDE_PATH}
   )
 
-  # Apply essential compile definitions (same as main rccl target)
-  target_compile_definitions(rccl_${kernel_name} PRIVATE __HIP_PLATFORM_AMD__=1)
-  target_compile_definitions(rccl_${kernel_name} PRIVATE ROCM_VERSION=${ROCM_VERSION})
-  if(COLLTRACE)
-    target_compile_definitions(rccl_${kernel_name} PRIVATE ENABLE_COLLTRACE)
-  endif()
-  if(FAULT_INJECTION)
-    target_compile_definitions(rccl_${kernel_name} PRIVATE ENABLE_FAULT_INJECTION)
-  endif()
-  if(IFC_ENABLED)
-    target_compile_definitions(rccl_${kernel_name} PRIVATE USE_INDIRECT_FUNCTION_CALL)
-  endif()
-  # Note: ENABLE_LL128 is NOT added to type kernels to match original behavior
-  # LL128 code paths are only in the main rccl target
+  # Note: Common compile definitions (ENABLE_COLLTRACE, ENABLE_FAULT_INJECTION, etc.)
+  # are applied later via ALL_RCCL_TARGETS to avoid duplication with main rccl target
 
   # Set GPU architecture targets (critical for device compilation)
   foreach(target ${GPU_TARGETS})
@@ -1005,10 +993,28 @@ if(ROCTX_ENABLE)
   target_include_directories(rccl PRIVATE ${ROCTRACER_INCLUDE_DIR})
 endif()
 
-## Set RCCL compile definitions
-if(COLLTRACE)
-  target_compile_definitions(rccl PRIVATE ENABLE_COLLTRACE)
-endif()
+## Set compile definitions
+# Create unified list of all targets (rccl + type-specific kernel libraries)
+# This avoids duplication and ensures important flags aren't missed
+set(ALL_RCCL_TARGETS rccl ${TYPE_LIBRARIES})
+
+# Apply common compile definitions to ALL targets (rccl + type-specific kernels)
+# These definitions are needed by both the main library and device kernels
+foreach(tgt ${ALL_RCCL_TARGETS})
+  target_compile_definitions(${tgt} PRIVATE __HIP_PLATFORM_AMD__=1)
+  target_compile_definitions(${tgt} PRIVATE ROCM_VERSION=${ROCM_VERSION})
+  if(COLLTRACE)
+    target_compile_definitions(${tgt} PRIVATE ENABLE_COLLTRACE)
+  endif()
+  if(FAULT_INJECTION)
+    target_compile_definitions(${tgt} PRIVATE ENABLE_FAULT_INJECTION)
+  endif()
+  if(IFC_ENABLED)
+    target_compile_definitions(${tgt} PRIVATE USE_INDIRECT_FUNCTION_CALL)
+  endif()
+endforeach()
+
+# Apply rccl-only compile definitions (not needed by type-specific kernels)
 if(ENABLE_MSCCL_KERNEL)
   target_compile_definitions(rccl PRIVATE COMPILE_MSCCL_KERNEL)
 endif()

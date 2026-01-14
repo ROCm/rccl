@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
-all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot"]
+all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot", "AllToAllGda"]
 all_redops    = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys       = ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos    = ["LL","LL128","SIMPLE"]
@@ -88,6 +88,7 @@ algos_of_coll = {
   "AllGather":             ["RING", "PAT"],
   "AllReduce":             ["RING", "TREE"],
   "AllToAllPivot":         ["RING"],
+  "AllToAllGda":           [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":             ["RING"],
   "Reduce":                ["RING"],
   "ReduceScatter":         ["RING", "PAT"],
@@ -98,6 +99,7 @@ protos_of_coll = {
   "AllGather":              all_protos,
   "AllReduce":              all_protos,
   "AllToAllPivot":          ["SIMPLE"],
+  "AllToAllGda":            [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":              all_protos,
   "Reduce":                 all_protos,
   "ReduceScatter":          all_protos,
@@ -108,6 +110,7 @@ redops_of_coll = {
   "AllGather":            ["Sum"],
   "AllReduce":            all_redops,
   "AllToAllPivot":        ["Sum"],
+  "AllToAllGda":          [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":            ["Sum"],
   "Reduce":               all_redops,
   "ReduceScatter":        all_redops,
@@ -118,6 +121,7 @@ tys_of_coll = {
   "AllGather":             ["i8"],
   "AllReduce":             all_tys,
   "AllToAllPivot":         ["i8"],
+  "AllToAllGda":           [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":             ["i8"],
   "Reduce":                all_tys,
   "ReduceScatter":         all_tys,
@@ -128,6 +132,7 @@ acc_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_accs,
   "AllToAllPivot":         ["0"],
+  "AllToAllGda":           [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":             ["0"],
   "Reduce":                ["0"],
   "ReduceScatter":         ["0"],
@@ -138,6 +143,7 @@ pipelines_of_coll = {
   "AllGather":             ["0"],
   "AllReduce":             all_pipelines,
   "AllToAllPivot":         ["0"],
+  "AllToAllGda":           [],  # Requires ROCSHMEM - empty to disable generation
   "Broadcast":             ["0"],
   "Reduce":                all_pipelines,
   "ReduceScatter":         all_pipelines,
@@ -149,6 +155,7 @@ coll_camel_to_lower = {
   "AllGather":             "all_gather",
   "AllReduce":             "all_reduce",
   "AllToAllPivot":         "alltoall_pivot",
+  "AllToAllGda":           "alltoall_gda",
   "Broadcast":             "broadcast",
   "Reduce":                "reduce",
   "ReduceScatter":         "reduce_scatter",
@@ -639,7 +646,7 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
       )
       if fn.coll == "Broadcast":
         key = ((coll_idx & 0x3F) | ((proto_idx & 0x3F) << 8))
-      if fn.coll in ["SendRecv", "AllToAllPivot"]:
+      if fn.coll in ["SendRecv", "AllToAllPivot", "AllToAllGda"]:
         key = ((coll_idx & 0x3F))
       
       out(f'  {{{key}, {fn_id}}}, {comment}\n')
@@ -743,6 +750,7 @@ coll_to_header = {
   "AllGather": "all_gather.h",
   "AllReduce": "all_reduce.h",
   "AllToAllPivot": "alltoall_pivot.h",
+  "AllToAllGda": "alltoall_gda.h",
   "Broadcast": "broadcast.h",
   "Reduce": "reduce.h",
   "ReduceScatter": "reduce_scatter.h",
