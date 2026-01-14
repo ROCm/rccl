@@ -722,6 +722,11 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   int maxChannels;
   int minNchannels, maxNchannels;
   int duplicateCount = 1;
+#ifdef ENABLE_WARP_SPEED
+  int adjustedMaxNchannels = (int)ncclMaxNchannels(); // has to add it here to avoid GOTO fail label error
+  bool userUpdatedMaxChannels = adjustedMaxNchannels != MAXCHANNELS;
+  int warpScale = comm->topo->warpSpeedEnabled ? rcclGetMaxWarpsPerBlock(comm) : 1;
+#endif
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
   NCCLCHECKGOTO(ncclCalloc(&ringSend, nNodes*MAXCHANNELS), ret, fail);
   NCCLCHECKGOTO(ncclCalloc(&ringPrev, nranks*MAXCHANNELS), ret, fail);
@@ -831,12 +836,18 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
   // Get number of channels after duplication
 #ifdef ENABLE_WARP_SPEED
-  maxNchannels = (!comm->topo->warpSpeedEnabled)? std::min((int)ncclMaxNchannels(), maxChannels) : maxChannels;
+  adjustedMaxNchannels = std::min(adjustedMaxNchannels * warpScale, MAXCHANNELS);
+  maxNchannels = std::min(adjustedMaxNchannels, maxChannels);
+  if (userUpdatedMaxChannels) {
+    nc = maxNchannels;
+  } else {
+    nc = std::min(maxNchannels / comm->nChannels, nc) * comm->nChannels;
+  }
 #else
   maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
-#endif
   nc = std::min(maxNchannels/comm->nChannels, nc);
   nc *= comm->nChannels;
+#endif
   // Set ring prev/next for my rank
   for (int c=0; c<nChannels; c++) {
     struct ncclChannel* channel0 = comm->channels+c;

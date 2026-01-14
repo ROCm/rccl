@@ -2141,6 +2141,10 @@ static ncclResult_t topoGetAlgoInfo(
   if (simInfo) simInfo->estimatedTime = time;
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", nBytes, info->algorithm, info->protocol, time);
   int nc = comm->nChannels;
+#ifdef ENABLE_WARP_SPEED
+  int maxWarps = rcclGetMaxWarpsPerBlock(comm);
+  if(comm->topo->warpSpeedEnabled && nc >= maxWarps) nc /= maxWarps;
+#endif
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_COLLNET_DIRECT) {

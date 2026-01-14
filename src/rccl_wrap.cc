@@ -163,22 +163,10 @@ extern int64_t ncclParamMinNchannels();
 extern int64_t ncclParamMaxNchannels();
 RCCL_PARAM(ChannelTuningEnable, "CHANNEL_TUNING_ENABLE", 1);
 
-ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc){
-// #ifdef ENABLE_WARP_SPEED
-//   if(ncclParamMaxNchannels() > 0) {
-//     nc = std::min(nc, );
-//   }
-// #endif
-  if(comm->nNodes < 2) {
-#ifdef ENABLE_WARP_SPEED
-    if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")) {
-      nc = std::min(nc, (ncclParamMaxNchannels() > 0)? static_cast<int>(ncclParamMaxNchannels()) : 56); // limit to 56 channels for single node on MI350X
-    }
-#endif
-    if(!rcclParamChannelTuningEnable()) {
-      INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
-      return ncclSuccess;
-    }
+ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t nBytes, int& nc) {
+  if(comm->nNodes < 2 || !rcclParamChannelTuningEnable()) {
+    INFO(NCCL_TUNING, "RCCL Channel Tuning not applied");
+    return ncclSuccess;
   }
 
   auto tunableIndex = rcclGetTunableIndex(coll);
@@ -218,11 +206,6 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
     }
 
   }
-#ifdef ENABLE_WARP_SPEED
-  // Fall back to max 56/64 channels and tune warp speed channels later
-  int maxNchannels = (ncclParamMaxNchannels() > 0)? static_cast<int>(ncclParamMaxNchannels()) : ((comm->nNodes == 1)? 56 : 64);
-  nc = std::min(nc, maxNchannels);
-#endif
   return ncclSuccess;
 }
 
@@ -619,6 +602,17 @@ void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, si
   else if (info->protocol == NCCL_PROTO_LL) nThreads =  maxNthreads[NCCL_PROTO_LL];
   // ReduceScatter small count optimization
   if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nThreads = maxNthreads[NCCL_PROTO_LL];
+}
+
+int rcclGetMaxWarpsPerBlock(struct ncclComm* comm) {
+  int warpsPerBlock;
+  if(comm->nNodes == 1) {
+    warpsPerBlock = RCCL_SINGLE_NODE_MAX_NTHREADS / comm->WarpSize; // For single node, we use half the number of threads for perf reasons.
+  } else {
+    warpsPerBlock = IsArchMatch(comm->archName, "gfx950")? RCCL_GFX950_MAX_NTHREADS / comm->WarpSize:
+                                                          RCCL_DEFAULT_MAX_NTHREADS / comm->WarpSize;
+  }
+  return warpsPerBlock;
 }
 
 void rcclSetDefaultBuffSizes(struct ncclComm* comm, int defaultBuffSizes[]) {
