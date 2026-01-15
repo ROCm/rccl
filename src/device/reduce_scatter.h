@@ -23,16 +23,16 @@ namespace {
     if (work->enableDirectReduceScatter && msgSize <= 2097152) { 
       int nRanks = ncclShmem.comm.nRanks;
       const ssize_t numElements = work->count;
-    
+
       // Calculate Offset to utilize multiple channels
-      ssize_t channelOffset;
-      ssize_t numElementsPerBlock = numElements / gridDim.x;
+      ssize_t elementsPerBlock = numElements / gridDim.x;
       ssize_t remainderElements = numElements % gridDim.x;
+      // Calculate the number of elements per block for each block
+      // The first n blocks get 1 extra element to account for the remainder (n = remainderElements)
+      ssize_t numElementsPerBlock = elementsPerBlock + (blockIdx.x < remainderElements ? 1 : 0);
+      ssize_t channelOffset = blockIdx.x * elementsPerBlock + min((ssize_t)blockIdx.x, remainderElements);
 
-      // All blocks get the same base number of elements (uniform distribution)
-      channelOffset = blockIdx.x * numElementsPerBlock;
-
-      // Array of src pointers pointing to rank offsets in tempBuff (using shared memory)
+      // Array of src pointers pointing to rank offsets in tempBuff
       void** srcPtrs = (void**)ncclScratchForWarp(0); 
       if (tid == 0) {
         for (int i = 0; i < nRanks; i++) {
@@ -48,37 +48,11 @@ namespace {
       // Array for destination pointer to recvbuff
       void* dstPtrs[1];
       dstPtrs[0] = (void*)(recvbuff + channelOffset);
-      
-      if (tid < nthreads && numElementsPerBlock > 0) {
+      if (tid < nthreads) {
         // Call reduction across all rank offsets in tempbuff and store in recvbuff
         // TODO: Adjust maxSrcs to nRanks
         reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 64, 0, 1, 1, 0>
           (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nRanks, srcPtrs, 1, dstPtrs, numElementsPerBlock);
-      }
-
-      // Handle remainder elements with a second reduceCopy call
-      // Only the first 'remainderElements' blocks need to participate
-      if (remainderElements != 0 && blockIdx.x < remainderElements) {
-        // Calculate offset for remainder: starts after all the evenly distributed elements
-        ssize_t remainderOffset = gridDim.x * numElementsPerBlock + blockIdx.x;
-        
-        // Update src pointers for remainder
-        if (tid == 0) {
-          for (int i = 0; i < nRanks; i++) {
-            const ssize_t srcOffset = i * numElements + remainderOffset;
-            srcPtrs[i] = (void*)((T*)work->tempBuff + srcOffset);
-          }
-          // Update dst pointer for remainder
-          dstPtrs[0] = (void*)(recvbuff + remainderOffset);
-        }
-        // Sync threads to ensure all srcPtrs are set before second reduction
-        __syncthreads();
-        
-        if (tid < nthreads) {
-          // Each participating block processes exactly 1 remainder element
-          reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 64, 0, 1, 1, 0>
-            (tid, nthreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nRanks, srcPtrs, 1, dstPtrs, 1);
-        }
       }
     } else{
 #ifdef ENABLE_WARP_SPEED
