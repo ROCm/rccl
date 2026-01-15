@@ -68,7 +68,7 @@ jobs:
         run: |
           salloc -N 4 --ntasks-per-node 8 -p 17nodexgmi38 --reservation=rccl --exclusive -t 04:00:00 bash -c "
           source /apps/cvs_tests/TheRock/.venv/bin/activate &&
-          cd /apps/cvs_tests/cvs_heatmap/cvs-sbatch &&
+          cd /apps/cvs_tests/cvs-sbatch &&
           python ./setup_nodes.py &&
           srun -N1 -n1 ./run.sh"
 
