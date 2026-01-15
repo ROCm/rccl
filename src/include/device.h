@@ -387,6 +387,9 @@ struct alignas(16) ncclDevWorkColl {
   uintptr_t* recvbuffRmtAddrs;
 
   bool enableDirectReduceScatter;
+  // Per-work (per kernel launch) limit for Direct ReduceScatter in bytes.
+  // This is set by the host and used as a device-side safety gate.
+  uint32_t directReduceScatterLimitBytes;
   void* tempBuff;
   int currentRank;
   size_t count;

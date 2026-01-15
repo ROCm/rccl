@@ -34,6 +34,7 @@ RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
 // Otherwise, it is automatically set for certain archs, datatypes and reduction collectives
 RCCL_PARAM(disableReduceCopyPipelining, "DISABLE_REDUCE_COPY_PIPELINING", 0);
 RCCL_PARAM(DirectAllGatherThreshold, "DIRECT_ALLGATHER_THRESHOLD", 75497472);
+RCCL_PARAM(DirectReduceScatterThreshold, "DIRECT_REDUCE_SCATTER_THRESHOLD", 2097152);
 RCCL_PARAM(ThreadsPerBlock, "THREADS_PER_BLOCK", -1);
 RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 #ifdef ENABLE_WARP_SPEED
@@ -430,6 +431,34 @@ bool rcclUseAllGatherDirect(struct ncclComm* comm, size_t& msgSize) {
   return (comm->enableCustColl && (msgSize <= threshold) && (threshold != -1) && !rankMultiple)
     ;
 }
+
+bool rcclUseReduceScatterDirect(struct ncclComm* comm, size_t& msgSize) {
+  // Direct ReduceScatter is supported for MI350 (gfx950):
+  // - 2 nodes: enable for 128KiB .. 2MiB
+  // - 4 and 8 nodes: enable up to 2MiB
+  static int userDirectReduceScatterInput = -2;
+  if (userDirectReduceScatterInput == -2) {
+    const char *inputStr = getenv("RCCL_DIRECT_REDUCE_SCATTER_DISABLE");
+    userDirectReduceScatterInput = !inputStr ? 0 : 1;
+  }
+  if (userDirectReduceScatterInput == 1) {
+    INFO(NCCL_INIT, "RCCL DIRECT REDUCE-SCATTER has been disabled.");
+    return false;
+  }
+  const bool archGfx950 = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950");
+  if (!archGfx950) return false;
+
+  size_t threshold = rcclParamDirectReduceScatterThreshold();
+  // set threshold to 2MiB hard limit
+  threshold = std::min(threshold, (size_t)2097152);
+
+  if (msgSize > threshold) return false;
+  // for 2 nodes, enable if msgSize is in 128KiB .. 2MiB range
+  if (comm->nNodes == 2) return msgSize >= (size_t)131072;
+  if (comm->nNodes == 8 || comm->nNodes == 4) return true;
+  return false;
+}
+
 
 void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   static int pxnDisable = RCCL_VALUE_UNSET;

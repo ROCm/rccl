@@ -17,11 +17,10 @@ namespace {
   __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 #endif
     // Direct Reduce Scatter
-    // TODO: Move Direct RS out of rungRing into separate kernel 
-    // 2097152 = 2MB the Direct reduce scatter limit
+    // TODO: Move Direct RS out of rungRing into separate kernel
     size_t msgSize = work->count * sizeof(T) * ncclShmem.comm.nRanks;
-    if (work->enableDirectReduceScatter && msgSize <= 2097152) { 
-      int nRanks = ncclShmem.comm.nRanks;
+    if (work->enableDirectReduceScatter && msgSize <= (size_t)work->directReduceScatterLimitBytes) {
+      const int nRanks = ncclShmem.comm.nRanks; 
       const ssize_t numElements = work->count;
 
       // Calculate Offset to utilize multiple channels
@@ -62,7 +61,7 @@ namespace {
     ncclRing *ring = &ncclShmem.channel.ring;
 #endif
     int const *ringRanks = ring->userRanks;
-    const int nranks = ncclShmem.comm.nRanks;
+    const int nranks = ncclShmem.comm.nRanks; 
     size_t count;
     size_t gridOffset;
     size_t channelCount;

@@ -408,8 +408,6 @@ ncclResult_t ncclReduce_impl(const void* sendbuff, void* recvbuff, size_t count,
   return ncclEnqueueCheck(&info);
 }
 
-// Direct Reduce Scatter Limit
-RCCL_PARAM(DirectReduceScatterLimit, "DIRECT_REDUCE_SCATTER_LIMIT", 2097152);
 
 NCCL_API(ncclResult_t, ncclReduceScatter, const void* sendbuff, void* recvbuff, size_t recvcount,
     ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
@@ -442,7 +440,9 @@ ncclResult_t ncclReduceScatter_impl(const void* sendbuff, void* recvbuff, size_t
   // Reset value forcing direct reduce scatter algorithm 
   comm->enableDirectReduceScatter = 0; 
 
-  if (msgSize <= rcclParamDirectReduceScatterLimit() && rcclParamDirectReduceScatterLimit() > -1) {
+  if (rcclUseReduceScatterDirect(comm, msgSize)) {
+    INFO(NCCL_INIT, "RCCL DIRECT REDUCE-SCATTER recvcount=%zu msgSize=%zu rank=%d nRanks=%d nNodes=%d comm=%p stream=%p sendbuff=%p recvbuff=%p",
+      recvcount, msgSize, comm->rank, nRanks, comm->nNodes, comm, stream, sendbuff, recvbuff);
     // Temporary Buffer to store data from each rank
     void* tempbuff = comm->tempBuff;
 
