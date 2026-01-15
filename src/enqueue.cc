@@ -28,6 +28,7 @@
 #include <cinttypes> // PRIx64
 #include <cassert>
 #include <atomic>
+#include <cstdio>
 #include "latency_profiler/CollTraceFunc.h"
 
 using namespace rccl;
@@ -776,8 +777,8 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         int idx = debugCount.fetch_add(1, std::memory_order_relaxed);
         if (idx < 64) {
           int unrollFactor = (comm->unroll >= 0 && comm->unroll < NCCL_NUM_UNROLLS) ? (1 << comm->unroll) : -1;
-          INFO(NCCL_COLL,
-               "debug-funcid: funcId=%d func=%s algo=%s proto=%s redop=%s type=%s funcIdType=%s acc=%d pipeline=%d unroll=%d",
+          std::fprintf(stdout,
+               "debug-funcid: funcId=%d func=%s algo=%s proto=%s redop=%s type=%s funcIdType=%s acc=%d pipeline=%d unroll=%d\n",
                agg.devFuncId,
                ncclFuncToString(agg.func),
                ncclAlgoToString(agg.algorithm),
