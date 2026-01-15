@@ -1387,7 +1387,7 @@ include(cmake/rcclRAS.cmake)
 
 ## Building RCCL Tuner Plugin
 #==================================================================================================
-option(BUILD_TUNER_PLUGIN "Build the NCCL tuner plugin" ON)
+option(BUILD_TUNER_PLUGIN "Build the NCCL tuner plugin" OFF)
 
 if(BUILD_TUNER_PLUGIN)
   set(TUNER_PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext-tuner/example")
