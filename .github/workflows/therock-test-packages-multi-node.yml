@@ -61,12 +61,12 @@ jobs:
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       # The following step leverages slurm to run multi node rccl tests on the slurm mi350x cluster.
-      # salloc will hold 2 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
+      # salloc will hold 4 nodes while the commands inside the block run. After the block completes, salloc automatically releases the nodes.
       # sbatch script runs rccl_heatmap_cvs script which validates and generates a bandwidth heatmap file for different rccl collectives
       - name: Test gfx950
         if: ${{ inputs.amdgpu_families == 'gfx950-dcgpu' }}
         run: |
-          salloc -N 2 --ntasks-per-node 8 -p 17nodexgmi38 --reservation=rccl --exclusive -t 04:00:00 bash -c "
+          salloc -N 4 --ntasks-per-node 8 -p 17nodexgmi38 --reservation=rccl --exclusive -t 04:00:00 bash -c "
           source /apps/cvs_tests/TheRock/.venv/bin/activate &&
           cd /apps/cvs_tests/cvs_heatmap/cvs-sbatch &&
           python ./setup_nodes.py &&
