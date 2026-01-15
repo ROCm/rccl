@@ -2146,8 +2146,8 @@ static ncclResult_t topoGetAlgoInfo(
   if(comm->topo->warpSpeedEnabled) {
     nc /= comm->warpSpeedChannelMultiplier;
     // Temporary check as we reduce CU usage for all collectives
-    // To be removed once all collectives are optimized
-    if(comm->nNodes == 1 && info->func != ncclFuncAllReduce && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") ) {
+    // TODO: Remove this condition after optimizing all collectives
+    if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && info->func != ncclFuncAllReduce && ncclParamMaxNchannels() < 0) {
       nc *= 2;
     }
   }

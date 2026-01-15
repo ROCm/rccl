@@ -616,7 +616,8 @@ int rcclGetMaxWarpsPerBlock(struct ncclComm* comm) {
   if(comm->nNodes == 1) {
     warpsPerBlock = RCCL_SINGLE_NODE_MAX_NTHREADS / comm->WarpSize; // For single node, we use half the number of threads for perf reasons.
   } else {
-    warpsPerBlock = IsArchMatch(comm->archName, "gfx950")? RCCL_GFX950_MAX_NTHREADS / comm->WarpSize:
+    warpsPerBlock = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")?
+                                                          RCCL_GFX950_MAX_NTHREADS / comm->WarpSize:
                                                           RCCL_DEFAULT_MAX_NTHREADS / comm->WarpSize;
   }
   return warpsPerBlock;

@@ -725,7 +725,8 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
 #ifdef ENABLE_WARP_SPEED
   int adjustedMaxNchannels = (int)ncclMaxNchannels(); // has to add it here to avoid GOTO fail label error
   bool userUpdatedMaxChannels = adjustedMaxNchannels != MAXCHANNELS;
-  int warpScale = comm->topo->warpSpeedEnabled ? rcclGetMaxWarpsPerBlock(comm) : 1;
+  const int wsEnabled =comm->topo->warpSpeedEnabled;
+  const bool singleNode = comm->nNodes == 1;
 #endif
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
   NCCLCHECKGOTO(ncclCalloc(&ringSend, nNodes*MAXCHANNELS), ret, fail);
@@ -836,15 +837,28 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
   // Get number of channels after duplication
 #ifdef ENABLE_WARP_SPEED
-  if(!comm->topo->warpSpeedEnabled) maxChannels = std::min((comm->nNodes > 1? 64 : 56), maxChannels);
-  adjustedMaxNchannels = std::min(adjustedMaxNchannels * warpScale, MAXCHANNELS);
-  maxNchannels = std::min(adjustedMaxNchannels, maxChannels);
-  comm->warpSpeedChannelMultiplier = warpScale;
-  nc = userUpdatedMaxChannels? maxNchannels :  nc * comm->nChannels * warpScale;
-  if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && comm->topo->warpSpeedEnabled) {
-    // For gfx950 single-node, use half the channels since they are doubled on a single node
-    // Remove when all collectives have been optimized
-    nc /= 2;
+  comm->warpSpeedChannelMultiplier = wsEnabled ? rcclGetMaxWarpsPerBlock(comm) : 1;
+  if(wsEnabled) {
+    // If user didn't override, use requested channels; otherwise keep capped max.
+    if (!userUpdatedMaxChannels) {
+      maxNchannels = nc * comm->nChannels * comm->warpSpeedChannelMultiplier;
+      nc = singleNode? maxNchannels : std::min(maxNchannels, nc);
+    } else {
+      nc = maxNchannels = std::min(adjustedMaxNchannels * comm->warpSpeedChannelMultiplier, MAXCHANNELS);;
+    }
+
+    if (!userUpdatedMaxChannels && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && singleNode && wsEnabled) {
+      // For gfx950 single-node, use half the channels since they are doubled on a single node
+      // Remove when all collectives have been optimized
+      nc /= 2;
+    }
+    INFO(NCCL_TUNING, "WarpSpeed enabled: warpSpeedChannelMultiplier %d, maxNchannels %d, nc %d",
+        comm->warpSpeedChannelMultiplier, maxNchannels, nc);
+  } else {
+    maxChannels = std::min((singleNode? RCCL_MI3XX_MAX_SINGLE_NODE_CHANNELS : RCCL_MI3XX_MAX_MULTI_NODE_CHANNELS), maxChannels);
+    maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
+    nc = std::min(maxNchannels/comm->nChannels, nc);
+    nc *= comm->nChannels;
   }
 #else
   maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);

@@ -665,7 +665,7 @@ struct ncclComm {
   bool collTraceEnabled;
 #endif
 #ifdef ENABLE_WARP_SPEED
-  uint32_t warpSpeedChannelMultiplier;
+  int warpSpeedChannelMultiplier;
 #endif
 #ifdef ENABLE_FAULT_INJECTION
   uint64_t faults;
