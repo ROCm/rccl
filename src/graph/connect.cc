@@ -839,10 +839,12 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   if(!comm->topo->warpSpeedEnabled) maxChannels = std::min((comm->nNodes > 1? 64 : 56), maxChannels);
   adjustedMaxNchannels = std::min(adjustedMaxNchannels * warpScale, MAXCHANNELS);
   maxNchannels = std::min(adjustedMaxNchannels, maxChannels);
-  if (userUpdatedMaxChannels) {
-    nc = maxNchannels;
-  } else {
-    nc = std::min(maxNchannels / comm->nChannels, nc) * comm->nChannels;
+  comm->warpSpeedChannelMultiplier = warpScale;
+  nc = userUpdatedMaxChannels? maxNchannels :  nc * comm->nChannels * warpScale;
+  if(IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && comm->nNodes == 1 && comm->topo->warpSpeedEnabled) {
+    // For gfx950 single-node, use half the channels since they are doubled on a single node
+    // Remove when all collectives have been optimized
+    nc /= 2;
   }
 #else
   maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);

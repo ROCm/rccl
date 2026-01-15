@@ -177,8 +177,14 @@ ncclResult_t rcclOverrideChannels(struct ncclComm* comm, ncclFunc_t coll, size_t
 
   int minCTAs = comm->config.minCTAs;
   int maxCTAs = comm->config.maxCTAs;
+  int scalingFactor = 1;
+#ifdef ENABLE_WARP_SPEED
+  if(comm->topo->warpSpeedEnabled) {
+    scalingFactor = comm->warpSpeedChannelMultiplier; // each CU can handle 4 warps
+  }
+#endif
   int minNChannels = ncclParamMinNchannels();
-  int maxNChannels = std::max(comm->nChannels, static_cast<int>(ncclParamMaxNchannels()));
+  int maxNChannels = std::max(comm->nChannels / scalingFactor, static_cast<int>(ncclParamMaxNchannels()));
   size_t bytesPerRank = divUp(nBytes, comm->nRanks);
 
   for(int channelCountIndex = 0; channelCountIndex < RCCL_CHANNELS_TUNABLE_ENTRIES; ++channelCountIndex){
@@ -496,7 +502,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
       }
       // reuse the existing channel tuning logic if possible
       if (comm->nNodes == 1) {
-        rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock; // use 50% CUs for single node case
+        rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock;
       } else {
         rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
       }

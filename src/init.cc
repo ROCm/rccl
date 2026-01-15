@@ -1497,12 +1497,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       allGather3Data[rank].nc = 4;
     }
   }
-#ifdef ENABLE_WARP_SPEED
-  // Double default channels for WarpSpeed enabled communicators
-  if (comm->topo->warpSpeedEnabled) {
-    allGather3Data[rank].nc *= 2;
-  }
-#endif
+
   allGather3Data[rank].pivotA2AEnabled = comm->topo->pivotA2AEnabled && rcclParamPivotAlltoallEnable();
   comm->topo->ll128Enabled =  comm->topo->ll128Enabled || rcclParamLL128ForceEnable();
   allGather3Data[rank].ll128Enabled = comm->topo->ll128Enabled;
