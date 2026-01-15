@@ -2081,6 +2081,7 @@ static ncclResult_t updateCollCostTable(
 }
 
 extern int64_t ncclParamMinNchannels();
+extern int64_t ncclParamMaxNchannels();
 
 static ncclResult_t topoGetAlgoInfo(
     struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes,
@@ -2143,7 +2144,12 @@ static ncclResult_t topoGetAlgoInfo(
   int nc = comm->nChannels;
 #ifdef ENABLE_WARP_SPEED
   int maxWarps = rcclGetMaxWarpsPerBlock(comm);
-  if(comm->topo->warpSpeedEnabled && nc >= maxWarps) nc /= maxWarps;
+  if(comm->topo->warpSpeedEnabled) {
+    if (nc >= maxWarps && (((info->func == ncclFuncAllReduce || ncclParamMaxNchannels() > 0) && comm->nNodes == 1) || comm->nNodes > 1)) {
+      nc /= maxWarps; // scale down channels for AllReduce on single node and in any multi-node since WarpSpeed created maxWarps x nChannels
+    }
+    else nc /= 2; // scale down to 112/56 channels for other collectives on single node [this should be eliminated once all collectives are supported with WarpSpeed]
+  }
 #endif
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];

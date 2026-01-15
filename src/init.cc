@@ -1483,7 +1483,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     }
   }
 #ifdef ENABLE_WARP_SPEED
-  comm->topo->warpSpeedEnabled = (rcclParamWarpSpeedEnable() != 0 || rcclParamWarpSpeedAutoMode() != 0 || rcclParamWarpSpeedCuCount() > 0);
+  comm->topo->warpSpeedEnabled = (rcclParamWarpSpeedEnable() != 0 || rcclCanUseWarpSpeedAuto(comm, nNodes) != 0 || rcclParamWarpSpeedCuCount() > 0);
 #endif
 
   // For single node communicators that do not uses the full xgmi links per gpu, i.e., nranks < 8

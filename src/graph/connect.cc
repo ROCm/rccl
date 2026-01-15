@@ -836,6 +836,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
   // Get number of channels after duplication
 #ifdef ENABLE_WARP_SPEED
+  if(!comm->topo->warpSpeedEnabled) maxChannels = std::min((comm->nNodes > 1? 64 : 56), maxChannels);
   adjustedMaxNchannels = std::min(adjustedMaxNchannels * warpScale, MAXCHANNELS);
   maxNchannels = std::min(adjustedMaxNchannels, maxChannels);
   if (userUpdatedMaxChannels) {

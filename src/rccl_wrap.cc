@@ -532,14 +532,14 @@ void rcclSetWarpSpeedSupportAndFinalCuCount(struct ncclComm* comm, struct ncclKe
   cuCount = (support == 0)? nChannels : nChannels / warpsPerBlock + ((nChannels % warpsPerBlock) != 0 ? 1 : 0); // each CU can handle warpsPerBlock
 }
 
+bool rcclCanUseWarpSpeedAuto(struct ncclComm* comm, int nNodes) {
+  return IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && (nNodes == 1) && (rcclParamWarpSpeedAutoMode() != 0);
+}
+
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
   if(!rcclCollSupportsRing(info->func)) return;
-  if(rcclParamWarpSpeedAutoMode() != 0) { // Auto performance mode
-    if(!IsArchMatch(comm->archName, "gfx950")) {
-      // Auto mode only available for gfx950 currently, keep it to false
-      return;
-    }
+  if(rcclCanUseWarpSpeedAuto(comm, comm->nNodes)) { // Auto performance mode
     size_t minBytes = 0;
     commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
     // No early return based on the algorithm at the start of the function
@@ -548,14 +548,16 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     if(info->algorithm != NCCL_ALGO_RING) {
       return; // If Ring is not selected, assume it is suboptimal and return
     }
-    if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
-    else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
-    if(comm->nNodes == 1) {
-      if(nBytes >= minBytes && minBytes > 0) {
-        comm->unroll = NCCL_UNROLL_2;
-        info->nWarps = 4;
-        info->useWarpSpeed = true;
-      }
+    if(info->func == ncclFuncAllReduce) {
+      comm->unroll = NCCL_UNROLL_2; // allReduce now benefits from unroll factor of 2 in all modes due to changing its slicing strategy
+      minBytes = RCCL_WARP_SPEED_MIN_BYTES;
+    }
+    // temporarily disabling WarpSpeed for AllGather and ReduceScatter in auto mode
+    // if(info->func == ncclFuncAllReduce || info->func == ncclFuncAllGather) minBytes = RCCL_WARP_SPEED_MIN_BYTES;
+    // else if (info->func == ncclFuncReduceScatter) minBytes = RCCL_WARP_SPEED_MIN_BYTES << 2; // ReduceScatter requires higher message size to benefit from WarpSpeed
+    if(nBytes >= minBytes && minBytes > 0) {
+      info->nWarps = 4;
+      info->useWarpSpeed = true;
     }
   } else if (comm->topo->warpSpeedEnabled) {
     if(info->algorithm != NCCL_ALGO_RING) {
