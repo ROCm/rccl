@@ -877,7 +877,8 @@ endforeach()
 #   - -fgpu-rdc is required for cross-module device function calls
 #   - Device linking happens as a single final step
 set(TYPE_LIBRARIES)
-foreach(kernel_file ${TYPE_KERNEL_FILES})
+
+function(rccl_add_type_kernel kernel_file)
   get_filename_component(kernel_name ${kernel_file} NAME_WE)
 
   # Create object library for this type (compiled with hipcc via rocm-cmake)
@@ -910,7 +911,6 @@ foreach(kernel_file ${TYPE_KERNEL_FILES})
     ${HSA_INCLUDE_PATH}
   )
 
-
   # Note: Common compile definitions (ENABLE_COLLTRACE, ENABLE_FAULT_INJECTION, etc.)
   # are applied later via ALL_RCCL_TARGETS to avoid duplication with main rccl target
 
@@ -924,6 +924,11 @@ foreach(kernel_file ${TYPE_KERNEL_FILES})
   add_dependencies(rccl_${kernel_name} hipify_all)
 
   list(APPEND TYPE_LIBRARIES rccl_${kernel_name})
+  set(TYPE_LIBRARIES ${TYPE_LIBRARIES} PARENT_SCOPE)
+endfunction()
+
+foreach(kernel_file ${TYPE_KERNEL_FILES})
+  rccl_add_type_kernel(${kernel_file})
 endforeach()
 
 

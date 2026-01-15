@@ -27,8 +27,6 @@
 #include <cstring> // std::memcpy
 #include <cinttypes> // PRIx64
 #include <cassert>
-#include <atomic>
-#include <cstdio>
 #include "latency_profiler/CollTraceFunc.h"
 
 using namespace rccl;
@@ -38,153 +36,28 @@ struct ncclKernelMatch {
   bool specialized;
 };
 
-// Map from ncclDataType_t to type string suffix for kernel selection
-static const char* ncclDataTypeToKernelSuffix(ncclDataType_t type)
-{
-    switch(type)
-    {
-        case ncclInt8:
-        case ncclUint8: return "i8"; // i8 used for both since many ops treat them same
-        case ncclInt32: return "i32";
-        case ncclUint32: return "u32";
-        case ncclInt64: return "i64";
-        case ncclUint64: return "u64";
-        case ncclFloat16: return "f16";
-        case ncclFloat32: return "f32";
-        case ncclFloat64: return "f64";
-        case ncclBfloat16: return "bf16";
-        case ncclFloat8e4m3: return "f8e4m3";
-        case ncclFloat8e5m2: return "f8e5m2";
-        default: return nullptr;
-    }
-}
-
 // Type+Algorithm-specific kernel tables
-// Each type has two tables: ring (index 0) and tree (index 1)
+// Each type has two tables: ring and tree
+#define NCCL_KERNEL_TYPES(X) \
+  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
+  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
 
-// Ring algorithm kernels
-static ncclKernelMatch const ncclKerns_i8_ring[3] = {
-    {(void*)ncclDevKernel_i8_ring_1, true},
-    {(void*)ncclDevKernel_i8_ring_2, true},
-    {(void*)ncclDevKernel_i8_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_u8_ring[3] = {
-    {(void*)ncclDevKernel_u8_ring_1, true},
-    {(void*)ncclDevKernel_u8_ring_2, true},
-    {(void*)ncclDevKernel_u8_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_i32_ring[3] = {
-    {(void*)ncclDevKernel_i32_ring_1, true},
-    {(void*)ncclDevKernel_i32_ring_2, true},
-    {(void*)ncclDevKernel_i32_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_u32_ring[3] = {
-    {(void*)ncclDevKernel_u32_ring_1, true},
-    {(void*)ncclDevKernel_u32_ring_2, true},
-    {(void*)ncclDevKernel_u32_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_i64_ring[3] = {
-    {(void*)ncclDevKernel_i64_ring_1, true},
-    {(void*)ncclDevKernel_i64_ring_2, true},
-    {(void*)ncclDevKernel_i64_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_u64_ring[3] = {
-    {(void*)ncclDevKernel_u64_ring_1, true},
-    {(void*)ncclDevKernel_u64_ring_2, true},
-    {(void*)ncclDevKernel_u64_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_f16_ring[3] = {
-    {(void*)ncclDevKernel_f16_ring_1, true},
-    {(void*)ncclDevKernel_f16_ring_2, true},
-    {(void*)ncclDevKernel_f16_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_f32_ring[3] = {
-    {(void*)ncclDevKernel_f32_ring_1, true},
-    {(void*)ncclDevKernel_f32_ring_2, true},
-    {(void*)ncclDevKernel_f32_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_f64_ring[3] = {
-    {(void*)ncclDevKernel_f64_ring_1, true},
-    {(void*)ncclDevKernel_f64_ring_2, true},
-    {(void*)ncclDevKernel_f64_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_bf16_ring[3] = {
-    {(void*)ncclDevKernel_bf16_ring_1, true},
-    {(void*)ncclDevKernel_bf16_ring_2, true},
-    {(void*)ncclDevKernel_bf16_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_f8e4m3_ring[3] = {
-    {(void*)ncclDevKernel_f8e4m3_ring_1, true},
-    {(void*)ncclDevKernel_f8e4m3_ring_2, true},
-    {(void*)ncclDevKernel_f8e4m3_ring_4, true}
-};
-static ncclKernelMatch const ncclKerns_f8e5m2_ring[3] = {
-    {(void*)ncclDevKernel_f8e5m2_ring_1, true},
-    {(void*)ncclDevKernel_f8e5m2_ring_2, true},
-    {(void*)ncclDevKernel_f8e5m2_ring_4, true}
+#define DECLARE_KERNEL_TABLE(type, algo) \
+static ncclKernelMatch const ncclKerns_##type##_##algo[3] = { \
+    {(void*)ncclDevKernel_##type##_##algo##_1, true}, \
+    {(void*)ncclDevKernel_##type##_##algo##_2, true}, \
+    {(void*)ncclDevKernel_##type##_##algo##_4, true} \
 };
 
-// Tree algorithm kernels (TREE and PAT)
-static ncclKernelMatch const ncclKerns_i8_tree[3] = {
-    {(void*)ncclDevKernel_i8_tree_1, true},
-    {(void*)ncclDevKernel_i8_tree_2, true},
-    {(void*)ncclDevKernel_i8_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_u8_tree[3] = {
-    {(void*)ncclDevKernel_u8_tree_1, true},
-    {(void*)ncclDevKernel_u8_tree_2, true},
-    {(void*)ncclDevKernel_u8_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_i32_tree[3] = {
-    {(void*)ncclDevKernel_i32_tree_1, true},
-    {(void*)ncclDevKernel_i32_tree_2, true},
-    {(void*)ncclDevKernel_i32_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_u32_tree[3] = {
-    {(void*)ncclDevKernel_u32_tree_1, true},
-    {(void*)ncclDevKernel_u32_tree_2, true},
-    {(void*)ncclDevKernel_u32_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_i64_tree[3] = {
-    {(void*)ncclDevKernel_i64_tree_1, true},
-    {(void*)ncclDevKernel_i64_tree_2, true},
-    {(void*)ncclDevKernel_i64_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_u64_tree[3] = {
-    {(void*)ncclDevKernel_u64_tree_1, true},
-    {(void*)ncclDevKernel_u64_tree_2, true},
-    {(void*)ncclDevKernel_u64_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_f16_tree[3] = {
-    {(void*)ncclDevKernel_f16_tree_1, true},
-    {(void*)ncclDevKernel_f16_tree_2, true},
-    {(void*)ncclDevKernel_f16_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_f32_tree[3] = {
-    {(void*)ncclDevKernel_f32_tree_1, true},
-    {(void*)ncclDevKernel_f32_tree_2, true},
-    {(void*)ncclDevKernel_f32_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_f64_tree[3] = {
-    {(void*)ncclDevKernel_f64_tree_1, true},
-    {(void*)ncclDevKernel_f64_tree_2, true},
-    {(void*)ncclDevKernel_f64_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_bf16_tree[3] = {
-    {(void*)ncclDevKernel_bf16_tree_1, true},
-    {(void*)ncclDevKernel_bf16_tree_2, true},
-    {(void*)ncclDevKernel_bf16_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_f8e4m3_tree[3] = {
-    {(void*)ncclDevKernel_f8e4m3_tree_1, true},
-    {(void*)ncclDevKernel_f8e4m3_tree_2, true},
-    {(void*)ncclDevKernel_f8e4m3_tree_4, true}
-};
-static ncclKernelMatch const ncclKerns_f8e5m2_tree[3] = {
-    {(void*)ncclDevKernel_f8e5m2_tree_1, true},
-    {(void*)ncclDevKernel_f8e5m2_tree_2, true},
-    {(void*)ncclDevKernel_f8e5m2_tree_4, true}
-};
+#define DECLARE_KERNEL_TABLES(type) \
+  DECLARE_KERNEL_TABLE(type, ring) \
+  DECLARE_KERNEL_TABLE(type, tree)
+
+NCCL_KERNEL_TYPES(DECLARE_KERNEL_TABLES)
+
+#undef DECLARE_KERNEL_TABLES
+#undef DECLARE_KERNEL_TABLE
+#undef NCCL_KERNEL_TYPES
 
 // Check if algorithm uses tree/PAT (non-ring) implementation
 static inline bool ncclAlgoIsTree(int algo) {
@@ -772,26 +645,6 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         WARN("%s: unsupported collective. Please ensure the collective has been enabled in build.", __func__);
         return ncclInvalidUsage;
       }
-      {
-        static std::atomic<int> debugCount{0};
-        int idx = debugCount.fetch_add(1, std::memory_order_relaxed);
-        if (idx < 64) {
-          int unrollFactor = (comm->unroll >= 0 && comm->unroll < NCCL_NUM_UNROLLS) ? (1 << comm->unroll) : -1;
-          std::fprintf(stdout,
-               "debug-funcid: funcId=%d func=%s algo=%s proto=%s redop=%s type=%s funcIdType=%s acc=%d pipeline=%d unroll=%d\n",
-               agg.devFuncId,
-               ncclFuncToString(agg.func),
-               ncclAlgoToString(agg.algorithm),
-               ncclProtoToString(agg.protocol),
-               ncclDevRedOpToString(agg.opDev.op),
-               ncclDatatypeToString(agg.datatype),
-               ncclDatatypeToString(funcIdDataType),
-               (agg.acc != nullptr),
-               agg.pipeline,
-               unrollFactor);
-        }
-      }
-
       if (!rcclIsArchSupportedForFunc(&agg, comm->archName)) {
         WARN("%s: unsupported architecture (%s) for collective %s(%s, %s, %s, %s, Acc=%d, Pipeline=%d).",
           __func__, comm->archName,

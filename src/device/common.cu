@@ -18,28 +18,6 @@ struct RunWorkNop {
   __device__ void run() {}
 };
 
-// Forward declarations for type-specific function tables
-// These are defined in the generated kernels_<type>_<algo>_<unroll>.cu files
-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__)
-
-// Define the list of types once
-#define NCCL_TYPES(X) \
-  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
-  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
-
-// Generate declarations
-#define DECLARE_TYPE(type) \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_1[]; \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_2[]; \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_4[];
-
-NCCL_TYPES(DECLARE_TYPE)
-
-#undef DECLARE_TYPE
-#undef NCCL_TYPES
-
-#endif
-
 #ifdef BUILD_GENERIC_KERNELS
 // Generic kernel that dispatches to type-specific device functions
 // Uses type-specific tables for efficient dispatch

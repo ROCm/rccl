@@ -200,13 +200,6 @@ def get_gfx_targets():
       curr_name = None
   return list(gfx_targets.keys())
 
-def compiling_for_arch(arch):
-  gfx_targets = get_gfx_targets()
-  for gfx_name, cu_count in gfx_targets:
-    if gfx_name == arch:
-      return True
-  return False
-
 def calc_unroll_and_pipeline_for_local_arch():
   if not is_local_arch_only:
     return (all_unrolls, all_pipelines)
@@ -419,6 +412,12 @@ primary_funcs = sorted(
 # Build index for primary functions - this is the canonical index
 primary_to_index = {fn: i for i, fn in enumerate(primary_funcs)}
 
+# Use funcIds from the first unroll factor for all dispatchers.
+def primary_id_for_first_unroll(fn: Fn):
+  first_unroll = local_unroll[0]
+  fn_first_unroll = Fn(fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, first_unroll)
+  return primary_to_index.get(Fn(*equivalent_primary(*fn_first_unroll)), -1)
+
 # Also add mappings for host_table_rows (includes signed SumPostDiv -> unsigned primary)
 # This allows looking up function IDs for all types that can be called at runtime
 for fn in host_table_rows:
@@ -538,15 +537,13 @@ with open(os.path.join(gensrc, "device_table.h"), "w") as f:
       # IMPORTANT: Use funcIds from the FIRST unroll factor for ALL unroll variants
       # The host_table only has entries for the first unroll, so all dispatchers
       # must accept those funcIds regardless of which unroll kernel is running
-      first_unroll = local_unroll[0]
       local_idx = 0
       for fn in ty_funcs:
         if fn.unroll != unroll:
           continue
         # Calculate the global funcId using the FIRST unroll factor
         # This ensures all unroll variants accept the same funcIds from host_table
-        fn_first_unroll = Fn(fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, first_unroll)
-        global_id = primary_to_index.get(Fn(*equivalent_primary(*fn_first_unroll)), -1)
+        global_id = primary_id_for_first_unroll(fn)
         if global_id >= 0:
           out(f"    case {global_id}: localIndex = {local_idx}; break;\n")
         local_idx += 1
@@ -931,13 +928,11 @@ for ty, algo_category, unroll in type_algo_unroll_tuples:
         # IMPORTANT: Use funcIds from the FIRST unroll factor for ALL unroll variants
         # The host_table only has entries for the first unroll, so all dispatchers
         # must accept those funcIds regardless of which unroll kernel is running
-        first_unroll = local_unroll[0]
         seen_global_ids = set()
         local_idx = 0
         for fn in ty_funcs:
           # Calculate the global funcId using the FIRST unroll factor
-          fn_first_unroll = Fn(fn.coll, fn.algo, fn.proto, fn.redop, fn.ty, fn.acc, fn.pipeline, first_unroll)
-          global_id = primary_to_index.get(Fn(*equivalent_primary(*fn_first_unroll)), -1)
+          global_id = primary_id_for_first_unroll(fn)
           if global_id >= 0 and global_id not in seen_global_ids:
             seen_global_ids.add(global_id)
             out(f"    case {global_id}: ncclDevFuncTable_{ty}_{algo_category}_{unroll}[{local_idx}](); break;\n")

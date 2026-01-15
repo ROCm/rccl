@@ -19,46 +19,6 @@
 #endif
 #include "network/unpack/unpack_defs.h"
 
-// Forward declarations for type-specific function tables
-// These are defined in the generated device_table.h
-typedef void (*ncclDevFuncPtr_t)();
-
-// Type-specific function tables (defined in generated code)
-// Skip these extern declarations in self-contained mode (NCCL_DEFINE_SHMEM)
-// because each kernel file only defines its own type's tables
-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx950__) && !defined(NCCL_DEFINE_SHMEM)
-
-// Define the list of types once
-#define NCCL_TYPES(X) \
-  X(i8) X(u8) X(i32) X(u32) X(i64) X(u64) \
-  X(f16) X(f32) X(f64) X(bf16) X(f8e4m3) X(f8e5m2)
-
-// Generate declarations
-#define DECLARE_TYPE(type) \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_1[]; \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_2[]; \
-  extern __device__ ncclDevFuncPtr_t const ncclDevFuncTable_##type##_4[];
-
-NCCL_TYPES(DECLARE_TYPE)
-
-#undef DECLARE_TYPE
-#undef NCCL_TYPES
-
-#endif
-
-// Type-specific caller functions are defined inline in device_table.h
-
-// Generic function tables and callers (these are redirected to type-specific ones in type-specific kernels)
-// Unroll-specific dispatch functions that extract type from funcId
-// and call the appropriate NCCL_CALL_FUNCTIONS_<type>_<unroll>(funcId)
-// Each function is specialized for a specific unroll factor (no runtime branching)
-// Skip in self-contained mode (NCCL_DEFINE_SHMEM) - not needed when each kernel has its own dispatcher
-#ifndef NCCL_DEFINE_SHMEM
-extern __device__ void callTypeSpecificFunction_1(int funcId);
-extern __device__ void callTypeSpecificFunction_2(int funcId);
-extern __device__ void callTypeSpecificFunction_4(int funcId);
-#endif
-
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
 
 #define __syncwarp()
