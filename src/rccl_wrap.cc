@@ -494,10 +494,9 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
         INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
         return;
       }
-      rcclWarpSpeedChannels *= 2;
       // reuse the existing channel tuning logic if possible
       if (comm->nNodes == 1) {
-        rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock / 2; // use 50% CUs for single node case
+        rcclWarpSpeedChannels = rcclWarpSpeedChannels * warpsPerBlock; // use 50% CUs for single node case
       } else {
         rcclWarpSpeedChannels = std::min(256, rcclWarpSpeedChannels * warpsPerBlock);
       }
