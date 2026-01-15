@@ -1400,21 +1400,13 @@ if(BUILD_TUNER_PLUGIN)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${TUNER_PLUGIN_INSTALL_DIR}
     COMMAND ${CMAKE_COMMAND} -E env make -C ${TUNER_PLUGIN_DIR} build
     COMMAND ${CMAKE_COMMAND} -E copy ${TUNER_PLUGIN_OUTPUT} ${TUNER_PLUGIN_INSTALL_DIR}/
+    COMMAND ${CMAKE_COMMAND} -E copy ${TUNER_PLUGIN_OUTPUT} ${TUNER_PLUGIN_INSTALL_DIR}/libnccl-tuner.so
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TUNER_PLUGIN_DIR}/rccl_tuner_gfx950.conf ${TUNER_PLUGIN_INSTALL_DIR}/
     COMMENT "Building RCCL tuner plugin and copying to ${TUNER_PLUGIN_INSTALL_DIR}"
     VERBATIM
   )
 
-  # Install the tuner plugin
-  install(FILES ${TUNER_PLUGIN_INSTALL_DIR}/${TUNER_PLUGIN_SO}
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          COMPONENT runtime)
-  
-  install(FILES ${TUNER_PLUGIN_DIR}/rccl_tuner_gfx950.conf
-          DESTINATION ${CMAKE_INSTALL_DATADIR}/rccl
-          COMPONENT runtime)
-
-  message(STATUS "RCCL tuner plugin will be built and installed")
+  message(STATUS "RCCL tuner plugin will be built and copied to build directory for auto-loading")
 else()
   message(STATUS "RCCL tuner plugin build disabled (set BUILD_TUNER_PLUGIN=ON to enable)")
 endif()
