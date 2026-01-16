@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <hip/hip_runtime_api.h>
 
 #define __hidden __attribute__ ((visibility("hidden")))
 #define MAX_LINE_LENGTH 256
@@ -150,6 +151,8 @@ static int countConfigLines(const char* filename) {
 static ncclResult_t loadConfig(TunerContext* ctx, const char* filename) {
   FILE* file = fopen(filename, "r");
   if (!file) {
+    fprintf(stderr, "\n******** CONF FILE NOT FOUND: %s ********\n", filename);
+    fprintf(stderr, "******** USING RCCL DEFAULTS (NO TUNING) ********\n\n");
     if (ctx->logFunction) {
       ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
                        "TUNER/ExamplePlugin: Config file %s not found, using defaults", filename);
@@ -282,6 +285,8 @@ static ncclResult_t loadConfig(TunerContext* ctx, const char* filename) {
   }
 
   fclose(file);
+  fprintf(stderr, "\n******** CONF FILE FOUND: %s ********\n", filename);
+  fprintf(stderr, "******** LOADED %d CONFIGURATIONS ********\n\n", ctx->numConfigs);
   if (ctx->logFunction) {
     ctx->logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
                      "TUNER/ExamplePlugin: Loaded %d tuning configurations from %s", ctx->numConfigs, filename);
@@ -300,15 +305,33 @@ __hidden ncclResult_t pluginInit(size_t nRanks, size_t nNodes, ncclDebugLogger_t
   ctx->nNodes = nNodes;
   ctx->logFunction = logFunction;
 
+  fprintf(stderr, "\n******** TUNER PLUGIN AUTOLOADED ********\n");
   if (logFunction) {
     logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
                 "TUNER/ExamplePlugin: Initializing tuner for %zu nodes, %zu ranks", nNodes, nRanks);
   }
 
-  // Try to load config file from environment variable or default location
+  // Determine which config file to use
   const char* configFile = getenv("NCCL_TUNER_CONFIG_FILE");
+  char archConfigFile[256];
+  
   if (!configFile) {
-    configFile = "nccl_tuner.conf"; // default config file name
+    // Try to detect GPU architecture and use arch-specific config
+    hipDeviceProp_t devProp;
+    if (hipGetDeviceProperties(&devProp, 0) == hipSuccess) {
+      // Extract gfx arch (e.g., "gfx950" from "gfx950:sramecc+:xnack-")
+      char* colon = strchr(devProp.gcnArchName, ':');
+      int archLen = colon ? (colon - devProp.gcnArchName) : strlen(devProp.gcnArchName);
+      snprintf(archConfigFile, sizeof(archConfigFile), "rccl_tuner_%.*s.conf", archLen, devProp.gcnArchName);
+      configFile = archConfigFile;
+      if (logFunction) {
+        logFunction(NCCL_LOG_INFO, NCCL_TUNING, __FILE__, __LINE__,
+                    "TUNER/ExamplePlugin: Trying arch-specific config: %s", configFile);
+      }
+    } else {
+      // Fall back to default if can't detect arch
+      configFile = "nccl_tuner.conf";
+    }
   }
 
   ncclResult_t result = loadConfig(ctx, configFile);

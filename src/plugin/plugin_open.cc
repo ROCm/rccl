@@ -89,6 +89,7 @@ static void* openPluginLib(enum ncclPluginType type, const char* libName) {
     snprintf(libName_, MAX_STR_LEN, "%s.so", pluginPrefix[type]);
     libHandles[type] = tryOpenLib(libName_, &openErr, openErrStr);
     if (libHandles[type]) {
+      fprintf(stderr, "RCCL: %s/Plugin: Automatically loaded %s (no NCCL_TUNER_PLUGIN env var set)\n", pluginNames[type], libName_);
       libNames[type] = strdup(libName_);
       return libHandles[type];
     }

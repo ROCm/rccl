@@ -14,6 +14,10 @@ NCCLDIR  := $(BUILDDIR)
 SRC_FILES := $(wildcard *.c)
 DST_DIR   := $(BUILDDIR)/test/unit/plugins
 
+# HIP support
+ROCM_PATH ?= /opt/rocm
+HIP_CFLAGS := -D__HIP_PLATFORM_AMD__ -I$(ROCM_PATH)/include
+
 default: ${BUILDDIR}/$(PLUGIN_SO)
 
 build: ${BUILDDIR}/$(PLUGIN_SO)
@@ -21,7 +25,7 @@ build: ${BUILDDIR}/$(PLUGIN_SO)
 ${BUILDDIR}/$(PLUGIN_SO): plugin.c
 	@printf "Compiling  %-35s > %s\n" $< $@
 	@mkdir -p ${BUILDDIR}
-	$(CC) -Inccl $(INC) -fPIC -shared -o $@ -Wl,-soname,$(PLUGIN_SO) $^
+	$(CC) -Inccl $(INC) $(HIP_CFLAGS) -fPIC -shared -o $@ -Wl,-soname,$(PLUGIN_SO) $^ -L$(ROCM_PATH)/lib -lamdhip64
 
 # Test targets - delegate to test directory
 test:

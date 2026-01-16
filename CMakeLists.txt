@@ -1395,13 +1395,23 @@ if(BUILD_TUNER_PLUGIN)
   set(TUNER_PLUGIN_OUTPUT "${TUNER_PLUGIN_DIR}/${TUNER_PLUGIN_SO}")
   set(TUNER_PLUGIN_INSTALL_DIR "${CMAKE_BINARY_DIR}")
 
+  # Find all .conf files in the tuner plugin directory
+  file(GLOB TUNER_CONF_FILES "${TUNER_PLUGIN_DIR}/*.conf")
+  
+  # Build list of copy commands for all .conf files
+  set(CONF_COPY_COMMANDS "")
+  foreach(CONF_FILE ${TUNER_CONF_FILES})
+    list(APPEND CONF_COPY_COMMANDS 
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CONF_FILE} ${TUNER_PLUGIN_INSTALL_DIR}/)
+  endforeach()
+
   # Add custom target to build the tuner plugin
   add_custom_target(tuner_plugin ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${TUNER_PLUGIN_INSTALL_DIR}
     COMMAND ${CMAKE_COMMAND} -E env make -C ${TUNER_PLUGIN_DIR} build
     COMMAND ${CMAKE_COMMAND} -E copy ${TUNER_PLUGIN_OUTPUT} ${TUNER_PLUGIN_INSTALL_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy ${TUNER_PLUGIN_OUTPUT} ${TUNER_PLUGIN_INSTALL_DIR}/libnccl-tuner.so
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TUNER_PLUGIN_DIR}/rccl_tuner_gfx950.conf ${TUNER_PLUGIN_INSTALL_DIR}/
+    ${CONF_COPY_COMMANDS}
     COMMENT "Building RCCL tuner plugin and copying to ${TUNER_PLUGIN_INSTALL_DIR}"
     VERBATIM
   )
