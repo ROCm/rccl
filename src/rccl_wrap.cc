@@ -574,6 +574,18 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     info->useWarpSpeed = true;
   }
 }
+
+int rcclGetMaxWarpsPerBlock(struct ncclComm* comm) {
+  int warpsPerBlock;
+  if(comm->nNodes == 1) {
+    warpsPerBlock = RCCL_SINGLE_NODE_MAX_NTHREADS / comm->WarpSize; // For single node, we use half the number of threads for perf reasons.
+  } else {
+    warpsPerBlock = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")?
+                                                          RCCL_GFX950_MAX_NTHREADS / comm->WarpSize:
+                                                          RCCL_DEFAULT_MAX_NTHREADS / comm->WarpSize;
+  }
+  return warpsPerBlock;
+}
 #endif
 
 void rcclGetMaxNthreads(struct ncclComm* comm, int maxNthreads[]) {
@@ -611,18 +623,6 @@ void rcclOptThreadBlockSize(struct ncclComm* comm, struct ncclTaskColl* info, si
   else if (info->protocol == NCCL_PROTO_LL) nThreads =  maxNthreads[NCCL_PROTO_LL];
   // ReduceScatter small count optimization
   if (info->func == ncclFuncReduceScatter && divUp(nBytes, comm->nRanks) <= 524288) nThreads = maxNthreads[NCCL_PROTO_LL];
-}
-
-int rcclGetMaxWarpsPerBlock(struct ncclComm* comm) {
-  int warpsPerBlock;
-  if(comm->nNodes == 1) {
-    warpsPerBlock = RCCL_SINGLE_NODE_MAX_NTHREADS / comm->WarpSize; // For single node, we use half the number of threads for perf reasons.
-  } else {
-    warpsPerBlock = IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950")?
-                                                          RCCL_GFX950_MAX_NTHREADS / comm->WarpSize:
-                                                          RCCL_DEFAULT_MAX_NTHREADS / comm->WarpSize;
-  }
-  return warpsPerBlock;
 }
 
 void rcclSetDefaultBuffSizes(struct ncclComm* comm, int defaultBuffSizes[]) {
