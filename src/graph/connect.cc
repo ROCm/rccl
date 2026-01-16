@@ -722,10 +722,11 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   int maxChannels;
   int minNchannels, maxNchannels;
   int duplicateCount = 1;
+  int channelMultiplier = 1;
 #ifdef ENABLE_WARP_SPEED
   int adjustedMaxNchannels = (int)ncclMaxNchannels(); // has to add it here to avoid GOTO fail label error
   bool userUpdatedMaxChannels = adjustedMaxNchannels != MAXCHANNELS;
-  const int wsEnabled =comm->topo->warpSpeedEnabled;
+  const int wsEnabled = comm->topo->warpSpeedEnabled;
   const bool singleNode = comm->nNodes == 1;
 #endif
   NCCLCHECK(ncclCalloc(&ringRecv, nNodes*MAXCHANNELS));
@@ -837,14 +838,14 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   }
   // Get number of channels after duplication
 #ifdef ENABLE_WARP_SPEED
-  comm->warpSpeedChannelMultiplier = wsEnabled ? rcclGetMaxWarpsPerBlock(comm) : 1;
+  channelMultiplier = comm->warpSpeedChannelMultiplier = wsEnabled ? rcclGetMaxWarpsPerBlock(comm) : 1;
   if(wsEnabled) {
     // If user didn't override, use requested channels; otherwise keep capped max.
     if (!userUpdatedMaxChannels) {
-      maxNchannels = nc * comm->nChannels * comm->warpSpeedChannelMultiplier;
+      maxNchannels = nc * comm->nChannels * channelMultiplier;
       nc = singleNode? maxNchannels : std::min(maxNchannels, nc);
     } else {
-      nc = maxNchannels = std::min(adjustedMaxNchannels * comm->warpSpeedChannelMultiplier, MAXCHANNELS);;
+      nc = maxNchannels = std::min(adjustedMaxNchannels * channelMultiplier, MAXCHANNELS);;
     }
 
     if (!userUpdatedMaxChannels && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx950") && singleNode && wsEnabled) {
@@ -853,7 +854,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
       nc /= 2;
     }
     INFO(NCCL_TUNING, "WarpSpeed enabled: warpSpeedChannelMultiplier %d, maxNchannels %d, nc %d",
-        comm->warpSpeedChannelMultiplier, maxNchannels, nc);
+        channelMultiplier, maxNchannels, nc);
   } else {
     maxChannels = std::min((singleNode? RCCL_MI3XX_MAX_SINGLE_NODE_CHANNELS : RCCL_MI3XX_MAX_MULTI_NODE_CHANNELS), maxChannels);
     maxNchannels = std::min((int)ncclMaxNchannels(), maxChannels);
@@ -928,10 +929,10 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   // We permit combining max, then min, to only use the first channels, then duplicate them.
   if (comm->sharedRes->owner != comm) {
     /* child comm #channels cannot exceed top parent #channels. */
-    nChannels = comm->nChannels = std::min(std::min(std::min(ncclMaxNchannels(), nChannels), comm->config.maxCTAs), comm->sharedRes->tpNChannels);
+    nChannels = comm->nChannels = std::min(std::min(std::min(ncclMaxNchannels() * channelMultiplier, nChannels), comm->config.maxCTAs), comm->sharedRes->tpNChannels);
     nChannels = comm->nChannels = copyChannels(comm, nChannels, std::min(std::max(minNchannels, std::max(nc, comm->config.minCTAs)), comm->sharedRes->tpNChannels), ringPrev, ringNext);
   } else {
-    nChannels = comm->nChannels = std::min(std::min(ncclMaxNchannels(), nChannels), comm->config.maxCTAs);
+    nChannels = comm->nChannels = std::min(std::min(ncclMaxNchannels() * channelMultiplier, nChannels), comm->config.maxCTAs);
     nChannels = comm->nChannels = copyChannels(comm, nChannels, std::max(minNchannels, std::max(nc, comm->config.minCTAs)), ringPrev, ringNext);
   }
 
