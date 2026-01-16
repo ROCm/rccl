@@ -449,8 +449,12 @@ bool rcclUseReduceScatterDirect(struct ncclComm* comm, size_t& msgSize) {
   if (!archGfx950) return false;
 
   size_t threshold = rcclParamDirectReduceScatterThreshold();
-  // set threshold to 2MiB hard limit
-  threshold = std::min(threshold, (size_t)2097152);
+  if (threshold > -1) { 
+    // set threshold to 2MiB hard limit
+    threshold = std::min(threshold, (size_t)2097152);
+  } else {
+    threshold = 2097152;
+  }
 
   if (msgSize > threshold) return false;
   // for 2 nodes, enable if msgSize is in 128KiB .. 2MiB range
