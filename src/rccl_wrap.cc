@@ -39,7 +39,7 @@ RCCL_PARAM(UnrollFactor, "UNROLL_FACTOR", -1);
 #ifdef ENABLE_WARP_SPEED
 RCCL_PARAM(WarpSpeedCuCount, "WARP_SPEED_CU_COUNT", 0);
 RCCL_PARAM(WarpSpeedAutoMode, "WARP_SPEED_AUTO", 1);
-RCCL_PARAM(WarpSpeedEnable, "WARP_SPEED_ENABLE", 0);
+RCCL_PARAM(WarpSpeedForceEnable, "WARP_SPEED_FORCE_ENABLE", 0);
 #endif
 #define RCCL_WARP_SPEED_MIN_BYTES (1ULL << 26) // 64 MB
 
@@ -543,10 +543,19 @@ bool rcclCanUseWarpSpeedAuto(struct ncclComm* comm, int nNodes) {
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
+  if(!comm->topo->warpSpeedEnabled) return;
+  commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
   if(!rcclCollSupportsRing(info->func)) return;
-  if(rcclCanUseWarpSpeedAuto(comm, comm->nNodes)) { // Auto performance mode
+  if (rcclParamWarpSpeedForceEnable() > 0) { // Manual performance mode
+    if(info->algorithm != NCCL_ALGO_RING) {
+      INFO(NCCL_TUNING, "Overriding %s algorithm with RING for nccl%s at %zu bytes as WarpSpeed is requested and only supports RING", ncclAlgoToString(info->algorithm), ncclFuncToString(info->func), nBytes);
+      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in manual mode as it only supports Ring
+    }
+    // TODO: Remove unroll update when all collectives are optimized
+    comm->unroll = NCCL_UNROLL_2;
+    info->useWarpSpeed = true;
+  } else if(rcclCanUseWarpSpeedAuto(comm, comm->nNodes)) { // Auto performance mode
     size_t minBytes = 0;
-    commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
     // No early return based on the algorithm at the start of the function
     // to allow unroll factor to be reverted to default.
     // This can be changed once per-task unroll factor setting is implemented.
@@ -566,12 +575,6 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
       info->nWarps = 4;
       info->useWarpSpeed = true;
     }
-  } else if (comm->topo->warpSpeedEnabled) {
-    if(info->algorithm != NCCL_ALGO_RING) {
-      INFO(NCCL_TUNING, "Overriding %s algorithm with RING for nccl%s at %zu bytes as WarpSpeed is requested and only supports RING", ncclAlgoToString(info->algorithm), ncclFuncToString(info->func), nBytes);
-      info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in manual mode as it only supports Ring
-    }
-    info->useWarpSpeed = true;
   }
 }
 
