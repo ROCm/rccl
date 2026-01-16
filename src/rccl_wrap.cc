@@ -554,7 +554,9 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
       return; // If Ring is not selected, assume it is suboptimal and return
     }
     if(info->func == ncclFuncAllReduce) {
-      comm->unroll = NCCL_UNROLL_2; // allReduce now benefits from unroll factor of 2 in all modes due to changing its slicing strategy
+       // allReduce now benefits from unroll factor of 2 in all modes due to changing its slicing strategy
+       // TODO: Remove unroll update when all collectives are optimized
+      comm->unroll = NCCL_UNROLL_2;
       minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     }
     // temporarily disabling WarpSpeed for AllGather and ReduceScatter in auto mode
