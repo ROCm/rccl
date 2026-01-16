@@ -343,12 +343,13 @@ ncclResult_t rcclGetAlgoInfo(struct ncclComm* comm, ncclFunc_t coll, uint64_t co
   task.count = count;
   task.datatype = dataType;
   NCCLCHECK(getAlgoInfo(comm, &task, collNetSupport, nvlsSupport, numPipeOps));
-  *algo = task.algorithm;
   *protocol = task.protocol;
 #ifdef ENABLE_WARP_SPEED
   *maxChannels = task.useWarpSpeed? task.nMaxChannels / task.nWarps : task.nMaxChannels;
-#else
+  *algo = task.useWarpSpeed? rcclAddonAlgos_t::RCCL_WARP_SPEED : task.algorithm;
+  #else
   *maxChannels = task.nMaxChannels;
+  *algo = task.algorithm;
 #endif
   return ncclSuccess;
 }
@@ -369,6 +370,11 @@ ncclResult_t rcclGetAlgoName(int algo, const char** algoName) {
       case rcclAddonAlgos_t::RCCL_MSCCLPP:
         *algoName = "MSCCLPP";
         break;
+#ifdef ENABLE_WARP_SPEED
+      case rcclAddonAlgos_t::RCCL_WARP_SPEED:
+        *algoName = "RING*"; // WarpSpeed (*) uses RING algorithm
+        break;
+#endif
       default:
         WARN("Invalid algorithm value: %d", algo);
         return ncclInvalidArgument;
@@ -497,7 +503,7 @@ void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, i
     if(!userChannelControlInput) {
       if(rcclParamWarpSpeedCuCount() != 0) {
         rcclWarpSpeedChannels = rcclParamWarpSpeedCuCount() * warpsPerBlock;
-        INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %d resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
+        INFO(NCCL_INIT, "RCCL Warp CU count set to user defined %lld resulting in %d channels", rcclParamWarpSpeedCuCount(), rcclWarpSpeedChannels);
         return;
       }
       // reuse the existing channel tuning logic if possible
