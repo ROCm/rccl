@@ -262,7 +262,7 @@ get_target_property(HSA_INCLUDE_PATH hsa-runtime64::hsa-runtime64 INTERFACE_INCL
 message(STATUS "HSA runtime: ${HSA_INCLUDE_PATH}")
 
 ## Check for amd-smi if ROCm 7.2.0 or newer
-if(ROCM_VERSION VERSION_GREATER_EQUAL "70200")
+if(ROCM_VERSION VERSION_GREATER_EQUAL "71100")
   find_package(amd_smi PATHS ${ROCM_PATH}/lib/cmake/amd_smi)
   if(amd_smi_FOUND)
     message(STATUS "amd_smi_INCLUDE_DIR: ${amd_smi_INCLUDE_DIR}")
