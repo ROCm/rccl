@@ -122,7 +122,7 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm);
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, const char* archName);
 
 // Direct ReduceScatter Limit
-RCCL_PARAM_DECLARE(DirectReduceScatterLimit);
+RCCL_PARAM_DECLARE(DirectReduceScatterThreshold);
 int parseFirmwareVersion();
 bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, char const* archName);
 #ifdef ENABLE_WARP_SPEED

@@ -17,8 +17,6 @@
 #include <rocshmem/rocshmem.hpp>
 #endif
 
-#define TEMP_BUFF_SIZE (4 * 1024 * 1024) // Define Size for Temporary Buffer for Direct RS
-
 using namespace rccl;
 
 const char* ncclFuncToString(ncclFunc_t fn) {

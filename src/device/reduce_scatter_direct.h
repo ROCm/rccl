@@ -44,7 +44,6 @@ struct RunWorkColl<ncclFuncReduceScatterDirect, T, RedOp, NCCL_ALGO_RING, NCCL_P
       dstPtrs[0] = (void*)(recvbuff + channelOffset);
       if (tid < nThreads) {
         // Call reduction across all rank offsets in tempbuff and store in recvbuff
-        // TODO: Adjust maxSrcs to nRanks
         reduceCopy<COLL_UNROLL, USE_ACC, RedOp, T, 0, 1, 64, 0, 1, 1, 0>
           (tid, nThreads, ncclShmem.redOpArgs[0], ncclShmem.redOpArgs, false, nRanks, srcPtrs, 1, dstPtrs, numElementsPerBlock);
       }

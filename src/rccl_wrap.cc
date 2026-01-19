@@ -450,11 +450,14 @@ bool rcclUseReduceScatterDirect(struct ncclComm* comm, size_t& msgSize) {
 
   size_t threshold = rcclParamDirectReduceScatterThreshold();
   if (threshold > -1) { 
-    // set threshold to 2MiB hard limit
+    // Set threshold to 2MiB hard limit
+    // NOTE: If the DirectReduceScatterThreshold / hard-limit is increased, ensure TEMP_BUFF_SIZE (init.cc)
+    // is increased accordingly -> TEMP_BUFF_SIZE >= 2 * (max enabled msgSize) for headroom.
     threshold = std::min(threshold, (size_t)2097152);
   } else {
     threshold = 2097152;
   }
+  INFO(NCCL_INIT, "RCCL DIRECT REDUCE-SCATTER threshold set to: %zu", threshold);
 
   if (msgSize > threshold) return false;
   // for 2 nodes, enable if msgSize is in 128KiB .. 2MiB range
@@ -483,10 +486,6 @@ void rcclSetPxn(struct ncclComm* comm,  int& rcclPxnDisable) {
   }
   rcclPxnDisable = pxnDisable;
   comm->enableCustColl = !pxnDisable;
-
-  // Enable Direct Reduce Scatter
-  // TODO: Add condition and Limit for when direct RS will be used
-  comm->enableDirectReduceScatter = 0;
 }
 
 void rcclSetP2pNetChunkSize(struct ncclComm* comm,  int& rcclP2pNetChunkSize) {
