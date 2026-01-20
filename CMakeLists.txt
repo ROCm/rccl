@@ -280,7 +280,7 @@ if(ROCM_VERSION VERSION_GREATER_EQUAL "71100")
 endif()
 
 if(NOT USE_AMDSMI)
-  ## Fallback to rocm-smi if amd-smi not found or ROCm < 7.2.0
+  ## Fallback to rocm-smi if amd-smi not found or ROCm < 7.11.0
   message(WARNING "Could not find amd_smi. Falling back to rocm_smi.")
   find_package(rocm_smi PATHS ${ROCM_PATH}/lib/cmake/rocm_smi)
   if(rocm_smi_FOUND)
