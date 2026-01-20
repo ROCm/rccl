@@ -12,15 +12,21 @@
 #include "nccl.h"
 #include "rccl_float8.h"
 #if ROCM_VERSION >= 60000
-   // hip_bf16.h should be used from ROCm 6.0
-  #include <hip/hip_bf16.h>
-  typedef __hip_bfloat16 hip_bfloat16;
+  // This is a workaround for the fact that the old hip_bfloat16.h header file may still be used by some rocm files.
+  // The _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_BFLOAT16_H_ and _HIP_BFLOAT16_H_ macros are defined in the old hip_bfloat16.h header
+  #if !defined(_HIP_INCLUDE_HIP_AMD_DETAIL_HIP_BFLOAT16_H_) && !defined(_HIP_BFLOAT16_H_)
+    #define _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_BFLOAT16_H_
+    #define _HIP_BFLOAT16_H_
+    #include <hip/hip_bf16.h>
+    typedef __hip_bfloat16 hip_bfloat16;
+  #else
+    #error "RCCL is not using the correct hip_bf16.h file. Please make sure that the correct header is included!"
+  #endif
 #else
   #include <hip/hip_bfloat16.h>
 #endif
-#include "nccl_common.h"
+#include "nccl_tuner.h"
 #include "bitops.h"
-#include "symmetric.h"
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit_struct.h"
 #endif
@@ -31,7 +37,11 @@
 #include <string>
 #include "debug.h"
 
-extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+2];
+#ifdef ENABLE_ROCSHMEM
+#include <rocshmem/rocshmem.hpp>
+#endif
+
+extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS+3];
 
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
@@ -219,6 +229,7 @@ struct ncclProxyConnector {
 struct ncclConnector {
   int connected;
   int hasSeen;
+  int p2pOnly;
   struct ncclProxyConnector proxyConn;
   struct ncclTransportComm* transportComm;
   void* transportResources;
@@ -289,7 +300,7 @@ struct ncclChannelPeer {
   int refCount;
 };
 
-struct ncclDevComm;
+struct ncclKernelComm;
 
 #pragma pack(push)  /* push current alignment to stack */
 #pragma pack(8)     /* set alignment to 8 bytes boundary */
@@ -390,6 +401,14 @@ struct alignas(16) ncclDevWorkColl {
   };
   uint64_t redOpArg;
   uint64_t opCount;
+
+#ifdef ENABLE_ROCSHMEM
+  rocshmem::rocshmem_team_t team;
+  int enableRocshmem;
+  void* tempbuff;
+  void* sndbuff;
+  int size;
+#endif
 };
 
 
@@ -507,10 +526,10 @@ typedef enum {
 } ncclCollTraceDataType_t;
 
 struct ncclCollTrace {
-  uint8_t type;
-  uint8_t bid;
   int16_t funcIndex;
-  uint16_t data_0;
+  uint8_t xccId:4;
+  uint16_t data_0:12;
+  uint8_t type;
   uint8_t batchIx;
   uint8_t tid;
   uint8_t channelId;
@@ -572,7 +591,7 @@ struct ncclDevProfiler {
   } data[MAX_PROFILER_EVENTS_PER_CHANNEL];
 };
 
-struct ncclDevComm {
+struct ncclKernelComm {
   int rank;
   int nRanks;
   int node;
@@ -620,8 +639,8 @@ struct ncclDevComm {
 #define RANDOM_DELAY_ON_WARP_START 0x1L
 #endif
 
-struct alignas(16) ncclDevCommAndChannels {
-  struct ncclDevComm comm;
+struct alignas(16) ncclKernelCommAndChannels {
+  struct ncclKernelComm comm;
   struct ncclDevChannel channels[MAXCHANNELS];
 };
 
@@ -636,7 +655,7 @@ struct channelMasks {
 };
 
 struct alignas(16) ncclDevKernelArgs {
-  struct ncclDevComm* comm;
+  struct ncclKernelComm* comm;
   struct channelMasks channelMask;
   enum ncclDevWorkStorageType workStorageType;
   uint32_t workMask;
@@ -777,7 +796,7 @@ inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto, 
   if (coll == ncclFuncBroadcast) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |
           ((uint64_t)(proto    & RCCL_FUNC_ID_MASK) << RCCL_PROTO_SHIFT);
-  } else if (coll == ncclFuncSendRecv || coll == ncclFuncAllToAllPivot) {
+  } else if (coll == ncclFuncSendRecv || coll == ncclFuncAlltoAllPivot || coll == ncclFuncAllToAllGda) {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT );
   } else {
     key = ((uint64_t)(coll     & RCCL_FUNC_ID_MASK) << RCCL_COLL_SHIFT ) |

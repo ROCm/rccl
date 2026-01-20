@@ -27,17 +27,30 @@
 #endif
 
 #if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
-#define __trace_hwreg()
+#define __trace_hwreg() \
+  collTrace->data_0 = 0;
 #else
 #define __trace_hwreg() \
-  asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (collTrace->data_0));
+  { int32_t hwid; \
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s" (hwid)); \
+    collTrace->data_0 = hwid >> 4; }
 #endif
+
+#if defined(__gfx942__) || defined(__gfx950__)
+#define __trace_xccid() \
+  { int32_t xccId; \
+    asm volatile ("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s" (xccId)); \
+    collTrace->xccId = xccId; }
+#else
+#define __trace_xccid() \
+  collTrace->xccId = 0;
+#endif
+
 #ifdef ENABLE_COLLTRACE
   #define INC_COLL_TRACE \
     uint32_t pos = __hip_atomic_fetch_add(&ncclShmem.collTraceTail->tail, 1, __ATOMIC_SEQ_CST, __HIP_MEMORY_SCOPE_WORKGROUP)%COLLTRACE_NUM_ITEMS; \
     struct ncclCollTrace* collTrace = ncclShmem.collTrace+pos; \
     collTrace->timeStamp = wall_clock64(); \
-    collTrace->bid = blockIdx.x; \
     collTrace->tid = threadIdx.x; \
     collTrace->channelId = ncclShmem.channelId;
     // TODO: switch to atomicInc after llvm crash is fixed
@@ -46,7 +59,8 @@
   #define traceKernelLaunch(launch_type, ix) { \
     INC_COLL_TRACE \
     collTrace->funcIndex = ncclShmem.funcId; \
-    __trace_hwreg()\
+    __trace_hwreg() \
+    __trace_xccid() \
     collTrace->batchIx = ix; \
     if (ncclShmem.workType == ncclDevWorkTypeP2p) { \
       struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
@@ -63,7 +77,7 @@
       collTrace->p2p.recvRegistered = p2pWork->recvNetReg; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
       collTrace->p2pOpCount[1] = p2pWork->recvOpCount; \
-      collTrace->type = (launch_type) | ncclCollTraceP2pElemType; \
+      __hip_atomic_store(&collTrace->type, (launch_type) | ncclCollTraceP2pElemType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
     } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
       struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
       collTrace->coll.nWarps = collWork->nWarps; \
@@ -71,7 +85,7 @@
       collTrace->coll.bid = ncclShmem.channelId - collWork->channelLo; \
       collTrace->coll.root = collWork->root; \
       collTrace->opCount = collWork->opCount; \
-      collTrace->type = (launch_type) | ncclCollTraceCollElemType; \
+      __hip_atomic_store(&collTrace->type, (launch_type) | ncclCollTraceCollElemType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
     } \
   }
   #define traceKernelEnd(end_type)  { \
@@ -81,11 +95,11 @@
       struct ncclDevWorkP2p *p2pWork = (struct ncclDevWorkP2p*)ncclShmem.workStorage; \
       collTrace->p2pOpCount[0] = p2pWork->sendOpCount; \
       collTrace->p2pOpCount[1] = p2pWork->recvOpCount; \
-      collTrace->type = (end_type) | ncclCollTraceP2pElemType; \
+      __hip_atomic_store(&collTrace->type, (end_type) | ncclCollTraceP2pElemType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
     } else if (ncclShmem.workType == ncclDevWorkTypeColl) { \
       struct ncclDevWorkColl *collWork = (struct ncclDevWorkColl*)ncclShmem.workStorage; \
       collTrace->opCount = collWork->opCount; \
-      collTrace->type = (end_type) | ncclCollTraceCollElemType; \
+      __hip_atomic_store(&collTrace->type, (end_type) | ncclCollTraceCollElemType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
     } \
   }
   #define traceData(data2, data4, data8_0, data8_1) { \
@@ -94,12 +108,12 @@
     collTrace->data_0 = data4; \
     collTrace->opCount = data8_0; \
     collTrace->data_1 = data8_1; \
-    collTrace->type = ncclCollTraceDataType; \
+    __hip_atomic_store(&collTrace->type, ncclCollTraceDataType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
   }
   #define traceAbort(){\
     INC_COLL_TRACE\
     collTrace->funcIndex = ncclShmem.funcId;\
-    collTrace->type = ncclCollTraceAbortType;\
+    __hip_atomic_store(&collTrace->type, ncclCollTraceAbortType, __ATOMIC_RELEASE, __HIP_MEMORY_SCOPE_WORKGROUP); \
   }
 #else
 #define traceKernelLaunch(launch_type, batchIx)
@@ -136,7 +150,7 @@ struct ncclShmemData {
   struct ncclDevKernelArgs args;
   int channelId;
   int aborted;
-  alignas(16) struct ncclDevComm comm;
+  alignas(16) struct ncclKernelComm comm;
   alignas(16) struct ncclDevChannel channel;
 #ifdef ENABLE_WARP_SPEED
   int warpComm;
@@ -488,7 +502,7 @@ __device__ __forceinline__ void profiler(int action) {
         ncclShmem.comm.workCompleted[ncclShmem.channelId].data[wc%MAX_PROFILER_EVENTS_PER_CHANNEL].counter = wc;
       }
       ncclShmem.channel.workCounter += ncclShmem.nWorks;
-      if (action == FINI) ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
+      if (action == FINI) ((ncclKernelCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter = ncclShmem.channel.workCounter;
     }
   }
 }
@@ -565,7 +579,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   /* set abort flag to 0 */
   if (tid == 0) {
     ncclShmem.aborted = 0;
-    ncclShmem.channel.workCounter = ((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter;
+    ncclShmem.channel.workCounter = ((ncclKernelCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId].workCounter;
   }
 
   // Use first 2 warps to load comm and channel, and remaining load work batch.
@@ -573,14 +587,14 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
   case 0:
     { void* dst = &ncclShmem.comm;
       void* src = ncclShmem.args.comm;
-      int bytes = sizeof(ncclDevComm);
-      static_assert(sizeof(ncclDevComm) <= 16*WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
+      int bytes = sizeof(ncclKernelComm);
+      static_assert(sizeof(ncclKernelComm) <= 16*WARP_SIZE, "ncclKernelComm cannot be loaded by a single warp in one insn.");
       copyToShmem16(tid, dst, src, bytes);
     } break;
   case 1:
-    { // Get address of channel without incurring indirect load from ncclDevComm::channels
+    { // Get address of channel without incurring indirect load from ncclKernelComm::channels
       void* dst = &ncclShmem.channel;
-      void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId];
+      void* src = &((ncclKernelCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId];
       int bytes = sizeof(ncclDevChannel);
       static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       copyToShmem16(tid-WARP_SIZE, dst, src, bytes);
@@ -627,7 +641,7 @@ __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* a
     __syncthreads();
     if(ncclShmem.warpChannelId[localWarpId] >= 0) {
       void* dst = &ncclShmem.warpChannel[localWarpId];
-      void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[localWarpId]];
+      void* src = &((ncclKernelCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.warpChannelId[localWarpId]];
       int bytes = sizeof(ncclDevChannel);
       static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
       // assert((tid-localWarpId*WARP_SIZE) >= 0 && (tid-localWarpId*WARP_SIZE) < WARP_SIZE);
