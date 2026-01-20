@@ -549,6 +549,7 @@ bool rcclCanUseWarpSpeedAuto(struct ncclComm* comm, int nNodes) {
 
 void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size_t nBytes) {
   info->useWarpSpeed = false;
+  static bool unrollFactorSet = getenv("RCCL_UNROLL_FACTOR") != nullptr;
   if(!comm->topo->warpSpeedEnabled) return;
   commSetUnrollFactor(comm);  // TODO: reset unroll factor per task rather than per comm
   if(!rcclCollSupportsRing(info->func)) return;
@@ -558,7 +559,7 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
       info->algorithm = NCCL_ALGO_RING; // Force Ring when WarpSpeed is enabled in manual mode as it only supports Ring
     }
     // TODO: Remove unroll update when all collectives are optimized
-    comm->unroll = NCCL_UNROLL_2;
+    if(!unrollFactorSet) comm->unroll =  NCCL_UNROLL_2;
     info->useWarpSpeed = true;
   } else if(rcclCanUseWarpSpeedAuto(comm, comm->nNodes)) { // Auto performance mode
     size_t minBytes = 0;
@@ -571,7 +572,7 @@ void rcclSetWarpSpeedAuto(struct ncclComm* comm, struct ncclTaskColl* info, size
     if(info->func == ncclFuncAllReduce) {
        // allReduce now benefits from unroll factor of 2 in all modes due to changing its slicing strategy
        // TODO: Remove unroll update when all collectives are optimized
-      comm->unroll = NCCL_UNROLL_2;
+      if(!unrollFactorSet) comm->unroll =  NCCL_UNROLL_2;
       minBytes = RCCL_WARP_SPEED_MIN_BYTES;
     }
     // temporarily disabling WarpSpeed for AllGather and ReduceScatter in auto mode
