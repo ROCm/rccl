@@ -1016,7 +1016,7 @@ ncclResult_t pncclGroupSimulateEnd(ncclSimInfo_t* simInfo);
  * define outside extern "C"{} to pass C++ template */
 ncclResult_t  ncclCommDump(ncclComm_t comm, std::unordered_map<std::string, std::string>& map);
 #else
-#warning "NCCL C++ API is disabled because C compiler is being used. Please use a C++ compiler to build NCCL."
+#pragma message "NCCL C++ API is disabled because C compiler is being used. Please use a C++ compiler to build NCCL."
 #endif
 
 #endif // end include guard
