@@ -69,6 +69,8 @@ jobs:
           JOB_ID=$(SETUP_NODES=1 sbatch --wait --parsable -N4 \
             /apps/cvs_tests/cvs-sbatch/sbatch/default.sbatch)
 
+          echo "Slurm job ID: ${JOB_ID}"
+
           LOG_FILE="/apps/cvs_tests/logs/TheRock-Multinode-RCCL-CI-Test-${JOB_ID}.out"
 
           if grep -q "short test summary info" "$LOG_FILE"; then
@@ -77,6 +79,7 @@ jobs:
             echo "[WARNING] Pytest summary not found; showing results tailing logs"
             tail -n 22 "$LOG_FILE"
           fi
+          echo "Full logs can be found at $LOG_FILE in the runner"
 
 
       - name: Configure AWS Credentials for non-forked repos
