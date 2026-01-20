@@ -517,7 +517,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
 #ifdef ENABLE_PROFILING
   struct ncclProf *prof, *prof_seq;
   prof = (struct ncclProf*)malloc(sizeof(struct ncclProf)*MAXCHANNELS*PROFILE_NUM_LAUNCHES);
-  if (prof == NULL) {
+  if (prof == nullptr) {
     WARN("Failed to allocate profiling buffer");
     // Skip profiling but continue with destruction
     goto skip_profiling;
@@ -2143,7 +2143,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   CUDACHECKGOTO(hipGetDeviceProperties(&devProp, cudaDev), res, fail);
   cuCount = devProp.multiProcessorCount;
   archName = (char*)malloc(strlen(devProp.gcnArchName) + 1);
-  if (archName == NULL) {
+  if (archName == nullptr) {
     WARN("Failed to allocate memory for architecture name");
     goto fail;
   }
@@ -2444,7 +2444,7 @@ static ncclResult_t envConfigOverride(ncclComm_t comm) {
   if (tmpNetName != NULL) {
     int netNameLen = strlen(tmpNetName) + 1;
     comm->config.netName = (char*)malloc(netNameLen);
-    if (comm->config.netName == NULL) {
+    if (comm->config.netName == nullptr) {
       WARN("Failed to allocate memory for network name");
       return ncclSystemError;      
     }

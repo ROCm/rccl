@@ -2335,7 +2335,7 @@ ncclResult_t rocmIbRegMrDmaBuf(void* comm, void* data, size_t size, int type, ui
   assert(size > 0);
   struct ncclIbNetCommBase* base = (struct ncclIbNetCommBase*) comm;
   struct ncclIbMrHandle* mhandleWrapper = (struct ncclIbMrHandle*) malloc(sizeof(struct ncclIbMrHandle));
-  if (mhandleWrapper == NULL) {
+  if (mhandleWrapper == nullptr) {
     WARN("Failed to allocate IB MR handle wrapper");
     return ncclSystemError;
   }

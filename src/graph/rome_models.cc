@@ -1492,7 +1492,7 @@ extern const char* topoPathTypeStr[];
 static void parseOptions(struct ncclTopoSystem* system, const char *options) {
   if (strcmp(options, "")) {
     char *str_temp = (char *)malloc(strlen(options) + 1);
-    if (str_temp == NULL) {
+    if (str_temp == nullptr) {
       WARN("Failed to allocate memory for options parsing");
       return;
     }
@@ -1540,7 +1540,7 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
 static bool checkOption(const char *options, const char *name) {
   if (strcmp(options, "")) {
     char *str_temp = (char *)malloc(strlen(options) + 1);
-    if (str_temp == NULL) {
+    if (str_temp == nullptr) {
       WARN("Failed to allocate memory for options checking");
       return false;
     }
@@ -1940,7 +1940,7 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 
   int *g8, n[NCCL_TOPO_MAX_NODES];
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
-  if (all_gpu_permutations == NULL) {
+  if (all_gpu_permutations == nullptr) {
     WARN("Failed to allocate memory for GPU permutations");
     return ncclSystemError;
   }
@@ -2325,7 +2325,7 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
 
   int *g16, n[NCCL_TOPO_MAX_NODES], rdm[NUMA_GPUS*NUMA_CPUS];
   int *all_gpu_permutations = (int *)malloc(TOTAL_PERMUTE_COUNT*NUMA_CPUS*NUMA_GPUS*sizeof(int));
-  if (all_gpu_permutations == NULL) {
+  if (all_gpu_permutations == nullptr) {
     WARN("Failed to allocate memory for GPU permutations");
     return ncclSystemError;
   }

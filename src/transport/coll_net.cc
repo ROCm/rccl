@@ -1281,7 +1281,7 @@ ncclResult_t ncclCollnetGraphRegisterBuffer(struct ncclComm* comm, const void* u
 
     if (*outRegBufFlag) {
       record = (struct ncclCollnetCleanupCallback*)malloc(sizeof(struct ncclCollnetCleanupCallback));
-      if (record == NULL) {
+      if (record == nullptr) {
         WARN("Failed to allocate collnet cleanup callback");
         return ncclSystemError;
       }

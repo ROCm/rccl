@@ -843,7 +843,7 @@ ncclResult_t ncclNvlsGraphRegisterBuffer(
   if (*outRegBufUsed) {
     if (sendRegRecord) {
       sendRecord = (struct ncclNvlsCleanupCallback*)malloc(sizeof(struct ncclNvlsCleanupCallback));
-      if (sendRecord == NULL) {
+      if (sendRecord == nullptr) {
         WARN("Failed to allocate NVLS send cleanup callback");
         return ncclSystemError;
       }
@@ -856,7 +856,7 @@ ncclResult_t ncclNvlsGraphRegisterBuffer(
 
     if (recvRegRecord) {
       recvRecord = (struct ncclNvlsCleanupCallback*)malloc(sizeof(struct ncclNvlsCleanupCallback));
-      if (recvRecord == NULL) {
+      if (recvRecord == nullptr) {
         WARN("Failed to allocate NVLS recv cleanup callback");
         return ncclSystemError;
       }

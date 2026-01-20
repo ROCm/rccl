@@ -37,9 +37,9 @@ static void shmHandleInit(int fd, char* shmPath, size_t shmSize, size_t realShmS
   if (create) {
     int slen = strlen(shmPath);
     handle->shmPath = (char*)malloc(slen + 1);
-    if (handle->shmPath == NULL) {
+    if (handle->shmPath == nullptr) {
       WARN("Failed to allocate memory for shared memory path");
-      // handle->shmPath remains NULL, caller should check
+      // handle->shmPath remains nullptr, caller should check
       return;
     }
     memcpy(handle->shmPath, shmPath, slen + 1);

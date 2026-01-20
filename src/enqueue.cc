@@ -1408,7 +1408,7 @@ static ncclResult_t uploadWork(struct ncclComm* comm, struct ncclKernelPlan* pla
     static_assert(16 <= alignof(max_align_t), "We rely on 16-byte alignment.");
     fifoBufHost = malloc(workBytes);
     #endif
-    if (fifoBufHost == NULL) {
+    if (fifoBufHost == nullptr) {
       WARN("Failed to allocate %zu bytes for work FIFO buffer", workBytes);
       return ncclSystemError;
     }

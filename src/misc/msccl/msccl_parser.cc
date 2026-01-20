@@ -721,7 +721,7 @@ ncclResult_t mscclAlgoMetaXmlLoad(const char* xmlFilePath, struct mscclXmlNode* 
 ncclResult_t mscclGetAlgoMetaFromXmlFile(const char* str, struct mscclAlgoMeta* algoMeta) {
   struct mscclXmlNode* node;
   node = (struct mscclXmlNode *)malloc(sizeof(struct mscclXmlNode));
-  if (node == NULL) {
+  if (node == nullptr) {
     WARN("Failed to allocate memory for MSCCL XML node");
     return ncclSystemError;
   }
