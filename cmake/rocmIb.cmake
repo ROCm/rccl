@@ -246,4 +246,12 @@ execute_process(
   COMMAND bash -c "sed -i 's/ncclNetIb/rocmNetIb/g' ${ROCM_NETIB_FILE}"
   WORKING_DIRECTORY ${RCCL_SRC_DIR}
 )
+execute_process(
+  COMMAND bash -c "sed -i 's/ncclIbFinalize/rocmNetIbFinalize/g' ${ROCM_NETIB_FILE}"
+  WORKING_DIRECTORY ${RCCL_SRC_DIR}
+)
+execute_process(
+  COMMAND bash -c "sed -i 's/ncclIbSetNetAttr/rocmNetIbSetNetAttr/g' ${ROCM_NETIB_FILE}"
+  WORKING_DIRECTORY ${RCCL_SRC_DIR}
+)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
