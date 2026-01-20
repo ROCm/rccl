@@ -138,7 +138,7 @@ union ncclLLFifoLine {
 #endif
 
 #ifdef ENABLE_WARP_SPEED
-#define MAXCHANNELS 512
+#define MAXCHANNELS 256
 #else
 #define MAXCHANNELS 128
 #endif
