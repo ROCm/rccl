@@ -768,8 +768,7 @@ static ncclResult_t scheduleCollTasksToPlan(
         addWorkBatchToPlan(comm, plan, c, workNode->workType, task->devFuncId, plan->workBytes);
         // Set pattern to profiler to add a proxy profiler for kernel events
         // for Direct Reduce Scatter (DRS), we don't need to add proxy op
-        bool isDRS = (task->func == ncclFuncReduceScatterDirect && comm->enableDirectReduceScatter);
-        if (!isDRS && task->func != ncclFuncAllToAllGda) {
+        if (task->func != ncclFuncReduceScatterDirect && task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, &proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, &proxyOp));
         }
@@ -919,8 +918,7 @@ static ncclResult_t scheduleCollTasksToPlan(
         // determine if that's actually true but it's also not clear if that would be an issue.
         // coverity[uninit_use_in_call:FALSE]
         // for Direct Reduce Scatter (DRS), we don't need to add proxy op
-        bool isDRS = (task->func == ncclFuncReduceScatterDirect && comm->enableDirectReduceScatter);
-        if (!isDRS && task->func != ncclFuncAllToAllGda) {
+        if (task->func != ncclFuncReduceScatterDirect && task->func != ncclFuncAllToAllGda) {
             NCCLCHECK(addProxyOpIfNeeded(comm, plan, proxyOp));
             NCCLCHECK(addProfilerProxyOpIfNeeded(comm, plan, proxyOp));
         }
