@@ -15,12 +15,14 @@
 #include "timer.h"
 #include "profiler.h"
 #include "transport.h"
+#include "cpuset.h"
 
 #include <sys/syscall.h>
 #include <assert.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sched.h>
+#include <algorithm>
 
 #define NCCL_MAX_PROXY_CONNECTIONS (NCCL_MAX_LOCAL_RANKS+1)
 
@@ -406,6 +408,8 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
     sub->traceInfo.chunkSize = op->chunkSize;
   }
   if (subIndex) {
+    args->nChannels = std::min(args->nChannels, op->nChannels);
+    args->nPeers = std::min(args->nPeers, op->nPeers);
     if ((args->sliceSteps != op->sliceSteps) ||
         (args->chunkSteps != op->chunkSteps) ||
         (args->protocol != op->protocol) ||
@@ -419,7 +423,7 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
       WARN("Proxy append on running operation");
       return ncclInternalError;
     }
-    return ncclSuccess;
+    goto exit;
   }
   //memset(&args->progress, 0, sizeof(struct ncclProxyArgs)-offsetof(struct ncclProxyArgs, progress));
   args->done = 0;
@@ -432,11 +436,15 @@ static ncclResult_t ncclProxyOpToArgs(struct ncclProxyOp* op, struct ncclProxyAr
   args->pattern = op->pattern;
   args->protocol = op->protocol;
   args->coll = op->coll;
+  args->collAPI = op->collAPI;
   args->algorithm = op->algorithm;
+  args->nChannels = op->nChannels;
+  args->nPeers = op->nPeers;
   args->specifics = op->specifics;
   args->state = ncclProxyOpReady;
   args->progress = op->connection->tcomm->proxyProgress;
   args->proxyAppendPtr = op->connection->proxyAppendPtr;
+exit:
   if (args->pattern != ncclPatternProfiler) ncclProfilerStartProxyOpEvent(subIndex, args);
   args->send = op->connection->send;
   args->prevRank = op->prevRank;
@@ -939,16 +947,43 @@ exit:
 NCCL_PARAM(ProxyDumpSignal, "PROXY_DUMP_SIGNAL", -1);
 NCCL_PARAM(ProgressAppendOpFreq, "PROGRESS_APPENDOP_FREQ", 8);
 
+static cpu_set_t proxyCpuset;
+static pthread_once_t proxyCpusetOnce = PTHREAD_ONCE_INIT;
+void proxyCpusetOnceFunc() {
+  const char* setEnv = ncclGetEnv("NCCL_PROXY_CPUSET");
+  if (setEnv) {
+    ncclResult_t res = ncclStrListToCpuset(setEnv, &proxyCpuset);
+    if (res != ncclSuccess) {
+      INFO(NCCL_ENV, "failed to decode NCCL_PROXY_CPUSET=%s. Ignoring", setEnv);
+      goto fail;
+    }
+    // debug info
+    char msg[1024] = {0};
+    cpu_set_t currSet;
+    sched_getaffinity(0, sizeof(cpu_set_t), &currSet);
+    (void)ncclCpusetToStrList(&currSet, msg, sizeof(msg));
+    snprintf(msg + strlen(msg), sizeof(msg) - strlen(msg), " changed to ");
+    (void)ncclCpusetToStrList(&proxyCpuset, msg + strlen(msg), sizeof(msg) - strlen(msg));
+    INFO(NCCL_ENV, "NCCL_PROXY_CPUSET = %s: %s", setEnv, msg);
+    return;
+  }
+  // if we arrive here we have either no env or we have failed to decode it
+fail:
+  CPU_ZERO(&proxyCpuset);
+  return;
+}
+
 void* ncclProxyProgress(void *proxyState_) {
   struct ncclProxyState* proxyState = (struct ncclProxyState*)proxyState_;
+
+  // This thread is created by proxyService, therefore setting the affinity is not needed.
+  INFO(NCCL_INIT, "[Proxy Progress] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
+
   if (setProxyThreadContext(proxyState)) {
     INFO(NCCL_INIT, "[Proxy Progress] Set CUDA context on device %d", proxyState->cudaDev);
   } else if (cudaSetDevice(proxyState->cudaDev) != cudaSuccess) {
     WARN("[Proxy Progress] Failed to set CUDA device %d", proxyState->cudaDev);
   }
-  // if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
-
-  INFO(NCCL_INIT, "[Proxy Progress] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
 
   struct ncclProxyProgressState* state = &proxyState->progressState;
   state->nextOps = -1;
@@ -1619,15 +1654,17 @@ enum {
 
 void* ncclProxyService(void* _args) {
   struct ncclProxyState* proxyState =  (struct ncclProxyState*) _args;
-  // if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
+
+  // set the thread affinity before setting the cuda context
+  pthread_once(&proxyCpusetOnce,proxyCpusetOnceFunc);
+  if (CPU_COUNT(&proxyCpuset)) sched_setaffinity(0, sizeof(cpu_set_t), &proxyCpuset);
+  INFO(NCCL_INIT, "[Proxy Service] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
+
   if (setProxyThreadContext(proxyState)) {
     INFO(NCCL_INIT, "[Proxy Service] Created CUDA context on device %d", proxyState->cudaDev);
   } else if (cudaSetDevice(proxyState->cudaDev) != cudaSuccess) {
     WARN("[Proxy Service] Failed to set CUDA device %d", proxyState->cudaDev);
   }
-  // if (CPU_COUNT(&comm->cpuAffinity)) sched_setaffinity(0, sizeof(cpu_set_t), &comm->cpuAffinity);
-
-  INFO(NCCL_INIT, "[Proxy Service] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
 
   // Prepare poll descriptor
   struct ncclProxyConnectionPool connectionPool;
@@ -1825,13 +1862,16 @@ void* ncclProxyServiceUDS(void* _args) {
   struct ncclProxyState* proxyState =  (struct ncclProxyState*) _args;
   struct pollfd pollfds[1];
 
+  // set the thread affinity before setting the cuda context
+  pthread_once(&proxyCpusetOnce,proxyCpusetOnceFunc);
+  if (CPU_COUNT(&proxyCpuset)) sched_setaffinity(0, sizeof(cpu_set_t), &proxyCpuset);
+  INFO(NCCL_INIT, "[Proxy Service UDS] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
+
   if (setProxyThreadContext(proxyState)) {
     INFO(NCCL_INIT, "[Proxy Service UDS] Set CUDA context on device %d", proxyState->cudaDev);
   } else if (cudaSetDevice(proxyState->cudaDev) != cudaSuccess) {
     WARN("[Proxy Service UDS] Failed to set CUDA device %d", proxyState->cudaDev);
   }
-
-  INFO(NCCL_INIT, "[Proxy Service UDS] Device %d CPU core %d", proxyState->cudaDev, sched_getcpu());
 
   if (ncclIpcSocketGetFd(&proxyState->ipcSock, &pollfds[0].fd) != ncclSuccess) {
     WARN("[Proxy Service UDS] Get listenSock fd fails");
@@ -1872,6 +1912,7 @@ ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union
   comm->proxyState->listenSock = sock;
   comm->proxyState->peerAddresses = peerAddresses;
   comm->proxyState->peerAddressesUDS = peerAddressesUDS;
+  comm->proxyState->netAttr = NCCL_NET_ATTR_INIT;
   if (rcclParamEnableProxyTrace()) {
     INFO(NCCL_PROXY, "Initializing ProxyTrace, rank: %d, commHash: %lu", comm->rank, comm->commHash);
     comm->proxyState->proxyTrace = std::make_unique<facebook_rccl::ProxyTrace>(comm->rank);
@@ -1900,6 +1941,8 @@ ncclResult_t ncclProxyCreate(struct ncclComm* comm) {
     proxyState->dmaBufSupport = comm->dmaBufSupport;
     proxyState->ncclNet = comm->ncclNet;
     proxyState->ncclCollNet = comm->ncclCollNet;
+    proxyState->netContext = comm->netContext;
+    proxyState->collNetContext = comm->collNetContext;
     proxyState->profilerContext = comm->profilerContext;
     proxyState->directMode = comm->directMode;
     memcpy(proxyState->buffSizes, comm->buffSizes, sizeof(comm->buffSizes));

@@ -26,7 +26,7 @@ install_dependencies=false
 install_library=false
 install_prefix="${ROCM_PATH}"
 log_trace=false
-msccl_kernel_enabled=true
+msccl_kernel_enabled=false
 mscclpp_enabled=false
 enable_mscclpp_clip=false
 num_parallel_jobs=$(nproc)
@@ -56,7 +56,7 @@ function display_help()
     echo "       --debug                 Build debug library"
     echo "       --enable_backtrace      Build with custom backtrace support"
     echo "       --disable-colltrace     Build without collective trace"
-    echo "       --disable-msccl-kernel  Build without MSCCL kernels"
+    echo "       --enable-msccl-kernel   Build with MSCCL kernels"
     echo "       --dump-asm              Disassemble code and dump assembly with inline code"
     echo "       --enable-mscclpp        Build with MSCCL++ support"
     echo "       --enable-mscclpp-clip   Build MSCCL++ with clip wrapper on bfloat16 and half addition routines"
