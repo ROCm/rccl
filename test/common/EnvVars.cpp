@@ -9,7 +9,9 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <unordered_map>
 
 namespace RcclUnitTesting
@@ -200,6 +202,8 @@ namespace RcclUnitTesting
     numDetectedGpus = min(numDetectedGpus, 16);
     isGfx94 = false;
     getArchInfo(&isGfx94, "gfx94");
+    isGfx95 = false;
+    getArchInfo(&isGfx95, "gfx95");
     isGfx12 = false;
     getArchInfo(&isGfx12, "gfx12");
     isGfx90 = false;
@@ -335,11 +339,13 @@ namespace RcclUnitTesting
     std::vector<std::string> result;
     if (getenv(varname.c_str()))
     {
-      char* token = strtok(getenv(varname.c_str()), ",;");
-      while (token != NULL)
+      std::string env = getenv(varname.c_str());
+      std::replace(env.begin(), env.end(), ';', ',');
+      std::istringstream ss(env);
+      std::string token;
+      while (std::getline(ss, token, ','))
       {
         result.push_back(token);
-        token = strtok(NULL, ",;");
       }
     }
     return result;

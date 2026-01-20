@@ -41,7 +41,7 @@ namespace RcclUnitTesting
                    std::vector<int>              const& numStreamsPerGroup,
                    int                           const  numGroupCalls = 1,
                    bool                          const  useBlocking   = true);
- 
+
     // Prepare TestBed for use with GPUs across multiple child processes
     void InitComms(std::vector<std::vector<int>> const& deviceIdsPerChild,
                    int  const numCollectivesInGroup = 1,
@@ -96,7 +96,7 @@ namespace RcclUnitTesting
     // Execute all collectives on all test children
     // Blocks until collective is completed
     void ExecuteCollectives(std::vector<int> const &currentRanks = {},
-                            int              const groupId       = -1, 
+                            int              const groupId       = -1,
                             bool             const useHipGraph   = false);
 
     // Perform results validation - compare output to expected
@@ -127,6 +127,12 @@ namespace RcclUnitTesting
     // Return all the supported data types based on build settings
     std::vector<ncclDataType_t> const& GetAllSupportedDataTypes();
 
+    // Returns the intersection of testRedOps with supported reduction operations as redOps.
+    void GetSupportedRedOps(std::vector<ncclRedOp_t>& redOps, const std::vector<ncclRedOp_t>& testRedOps);
+
+    // Returns the intersection of testDataTypes with supported data types as dataTypes.
+    void GetSupportedDataTypes(std::vector<ncclDataType_t>& dataTypes, const std::vector<ncclDataType_t>& testDataTypes);
+
     // Return a list for # of collectives per group
     std::vector<int> const GetNumCollsPerGroup(int const numCollectivesInGroup,
                                                 int const numGroupCalls);
@@ -140,7 +146,7 @@ namespace RcclUnitTesting
                                                           int const numGpus,
                                                           int const ranksPerGpu,
                                                           const std::vector<int>& gpuPriorityOrder);
-                                                          
+
     static std::vector<std::vector<int>> GetDeviceIdsList(int const numProcesses,
                                                           int const numGpus,
                                                           const std::vector<int>& gpuPriorityOrder);

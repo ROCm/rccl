@@ -74,17 +74,23 @@ namespace RcclUnitTesting
     }
   }
 
-  TEST(AllToAllv, OutOfPlace)
+  TEST(AlltoAllv, OutOfPlace)
   {
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclInt32, ncclFloat64, ncclFloat16};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclInt32, ncclFloat64, ncclFloat16};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -94,7 +100,7 @@ namespace RcclUnitTesting
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
 
-      // Prepare AllToAllV options
+      // Prepare AlltoAllV options
       std::vector<size_t> numInputElements;
       std::vector<size_t> numOutputElements;
       PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements, 40);
@@ -104,14 +110,14 @@ namespace RcclUnitTesting
         if (testBed.ev.showNames)
         {
           std::string name = testBed.GetTestCaseName(totalRanks, isMultiProcess,
-                                                     ncclCollAllToAllv, dataTypes[dataIdx],
+                                                     ncclCollAlltoAllv, dataTypes[dataIdx],
                                                      ncclSum, -1, inPlace, useManagedMem, useHipGraph);
           INFO("%s\n", name.c_str());
         }
 
         for (int rank = 0; rank < totalRanks; ++rank)
         {
-          testBed.SetCollectiveArgs(ncclCollAllToAllv,
+          testBed.SetCollectiveArgs(ncclCollAlltoAllv,
                                     dataTypes[dataIdx],
                                     numInputElements[rank],
                                     numOutputElements[rank],
@@ -132,17 +138,23 @@ namespace RcclUnitTesting
   }
 
 
-  TEST(AllToAllv, OutOfPlaceGraph)
+  TEST(AlltoAllv, OutOfPlaceGraph)
   {
     TestBed testBed;
 
     // Configuration
-    std::vector<ncclDataType_t> const& dataTypes       = {ncclFloat32, ncclInt8};
+    std::vector<ncclDataType_t> const& testDataTypes   = {ncclFloat32, ncclInt8};
     bool                        const  inPlace         = false;
     bool                        const  useManagedMem   = false;
     bool                        const  useHipGraph     = false;
 
     OptionalColArgs options;
+
+    std::vector<ncclDataType_t> dataTypes;
+    testBed.GetSupportedDataTypes(dataTypes, testDataTypes);
+    if (dataTypes.empty()) {
+      GTEST_SKIP() << "Skipping... test datatypes excluded by UT_DATATYPES.";
+    }
 
     bool isCorrect = true;
     for (int totalRanks : testBed.ev.GetNumGpusList())
@@ -152,7 +164,7 @@ namespace RcclUnitTesting
       const std::vector<int>& gpuPriorityOrder = testBed.ev.GetGpuPriorityOrder();
       testBed.InitComms(TestBed::GetDeviceIdsList(numProcesses, totalRanks, gpuPriorityOrder));
 
-      // Prepare AllToAllV options
+      // Prepare AlltoAllV options
       std::vector<size_t> numInputElements;
       std::vector<size_t> numOutputElements;
       PrepareCounts(totalRanks, 256, options, numInputElements, numOutputElements, 60);
@@ -162,14 +174,14 @@ namespace RcclUnitTesting
         if (testBed.ev.showNames)
         {
           std::string name = testBed.GetTestCaseName(totalRanks, isMultiProcess,
-                                                     ncclCollAllToAllv, dataTypes[dataIdx],
+                                                     ncclCollAlltoAllv, dataTypes[dataIdx],
                                                      ncclSum, -1, inPlace, useManagedMem, useHipGraph);
           INFO("%s\n", name.c_str());
         }
 
         for (int rank = 0; rank < totalRanks; ++rank)
         {
-          testBed.SetCollectiveArgs(ncclCollAllToAllv,
+          testBed.SetCollectiveArgs(ncclCollAlltoAllv,
                                     dataTypes[dataIdx],
                                     numInputElements[rank],
                                     numOutputElements[rank],

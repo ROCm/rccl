@@ -598,15 +598,32 @@ namespace RcclUnitTesting
                           "ncclReduceScatter");
           break;
         case ncclCollAllReduce:
-          CHILD_NCCL_CALL_RANK(errCode, ncclAllReduce(
-                                        collArg.inputGpu.ptr,
-                                        collArg.outputGpu.ptr,
-                                        collArg.numInputElements,
-                                        collArg.dataType,
-                                        collArg.options.redOp,
-                                        this->comms[localRank],
-                                        this->streams[groupId][localRank][collArg.streamIdx]),
-                          "ncclAllReduce");
+          // Use ncclAllReduceWithBias if bias is enabled
+          if (collArg.options.useBias)
+          {
+            CHILD_NCCL_CALL_RANK(errCode, ncclAllReduceWithBias(
+                                          collArg.inputGpu.ptr,
+                                          collArg.outputGpu.ptr,
+                                          collArg.numInputElements,
+                                          collArg.dataType,
+                                          collArg.options.redOp,
+                                          this->comms[localRank],
+                                          this->streams[groupId][localRank][collArg.streamIdx],
+                                          collArg.options.biasPtr),
+                            "ncclAllReduceWithBias");
+          }
+          else
+          {
+            CHILD_NCCL_CALL_RANK(errCode, ncclAllReduce(
+                                          collArg.inputGpu.ptr,
+                                          collArg.outputGpu.ptr,
+                                          collArg.numInputElements,
+                                          collArg.dataType,
+                                          collArg.options.redOp,
+                                          this->comms[localRank],
+                                          this->streams[groupId][localRank][collArg.streamIdx]),
+                            "ncclAllReduce");
+          }
           break;
         case ncclCollGather:
           CHILD_NCCL_CALL_RANK(errCode, ncclGather(
@@ -630,18 +647,18 @@ namespace RcclUnitTesting
                                       this->streams[groupId][localRank][collArg.streamIdx]),
                           "ncclScatter");
           break;
-        case ncclCollAllToAll:
-          CHILD_NCCL_CALL_RANK(errCode, ncclAllToAll(
+        case ncclCollAlltoAll:
+          CHILD_NCCL_CALL_RANK(errCode, ncclAlltoAll(
                                        collArg.inputGpu.ptr,
                                        collArg.outputGpu.ptr,
                                        collArg.numInputElements / collArg.totalRanks,
                                        collArg.dataType,
                                        this->comms[localRank],
                                        this->streams[groupId][localRank][collArg.streamIdx]),
-                          "ncclAllToAll");
+                          "ncclAlltoAll");
           break;
-        case ncclCollAllToAllv:
-          CHILD_NCCL_CALL_RANK(errCode, ncclAllToAllv(
+        case ncclCollAlltoAllv:
+          CHILD_NCCL_CALL_RANK(errCode, ncclAlltoAllv(
                                         collArg.inputGpu.ptr,
                                         collArg.options.sendcounts + (this->rankOffset + localRank)*this->totalRanks,
                                         collArg.options.sdispls + (this->rankOffset + localRank)*this->totalRanks,
@@ -651,7 +668,7 @@ namespace RcclUnitTesting
                                         collArg.dataType,
                                         this->comms[localRank],
                                         this->streams[groupId][localRank][collArg.streamIdx]),
-                          "ncclAllToAllv");
+                          "ncclAlltoAllv");
           break;
         case ncclCollSend:
           CHILD_NCCL_CALL_RANK(errCode, ncclSend(
@@ -762,7 +779,7 @@ namespace RcclUnitTesting
         {
           streamsToComplete.erase(streamsToComplete.begin() + i);
           i--;
-        }  
+        }
       }
       usElapsed = duration_cast<microseconds>(Clock::now() - start).count();
     }
@@ -773,13 +790,13 @@ namespace RcclUnitTesting
       if (this->verbose) INFO("Collective timed out, aborting\n");
       for (int localRank : localRanksToExecute)
       {
-        ncclCommAbort(this->comms[localRank]); 
+        ncclCommAbort(this->comms[localRank]);
         timedout = 1;
       }
     }
 
     // extra sync to flush GPU cache for validation later
-    // TODO: remove this after figuring out & fixing the exact behavior 
+    // TODO: remove this after figuring out & fixing the exact behavior
     // of fencing between kernels and at hipStreamQuery
     for (int localRank : localRanksToExecute)
     {
@@ -970,7 +987,7 @@ namespace RcclUnitTesting
     PIPE_READ(groupId);
 
     // Release graphs
-    for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank) 
+    for (int localRank = 0; localRank < this->deviceIds.size(); ++localRank)
     {
       CHECK_HIP(hipSetDevice(this->deviceIds[localRank]));
       for (int streamIdx = 0; streamIdx < this->numStreamsPerGroup[groupId]; ++streamIdx)
@@ -989,7 +1006,7 @@ namespace RcclUnitTesting
     {
       for (int i = 0; i < this->numStreamsPerGroup[groupId]; ++i)
         CHECK_HIP(hipStreamSynchronize(this->streams[groupId][localRank][i]));
-    }    
+    }
 
     this->graphs[groupId].clear();
     this->graphExecs[groupId].clear();
