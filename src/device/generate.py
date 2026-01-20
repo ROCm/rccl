@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import shutil
 
 # Order of colls, redops, tys, protos, algos must match src/include/device.h
-all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AllToAllPivot", "AllToAllGda", "ReduceScatterDirect"]
+all_colls     = ["Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "SendRecv", "", "", "AlltoAllPivot", "AllToAllGda", "ReduceScatterDirect"]
 all_redops    = ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 all_tys       = ["i8","u8","i32","u32","i64","u64","f16","f32","f64","bf16","f8e4m3","f8e5m2"]
 all_protos    = ["LL","LL128","SIMPLE"]
@@ -83,7 +83,7 @@ func_pattern = sys.argv[6:7]
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
-  func_pattern = "AllGather|AllReduce|AllToAllPivot|AllToAllGda|Broadcast|Reduce|ReduceScatter|ReduceScatterDirect|SendRecv"
+  func_pattern = "AllGather|AllReduce|AlltoAllPivot|AllToAllGda|Broadcast|Reduce|ReduceScatter|ReduceScatterDirect|SendRecv"
 
 ################################################################################
 
