@@ -2116,7 +2116,7 @@ ib_recv:
     }
   }
 
-  useDmaBuf  = (rocmIbDmaBufSupport(lComm->dev) == ncclSuccess);
+  useDmaBuf  = (rocmIbDmaBufSupport(lComm->dev) == ncclSuccess && ncclParamDmaBufEnable());
   rComm->flushEnabled = ((rocmIbGdrSupport() == ncclSuccess || useDmaBuf)
                             && (ncclIbGdrFlushDisable == 0)) ? 1 : 0;
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
