@@ -604,6 +604,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->topParentRanks);
   free(comm->topParentLocalRanks);
   free(comm->gproxyConn);
+  free(comm->archName);
 
   NCCLCHECK(ncclRegCleanup(comm));
 
@@ -2119,7 +2120,8 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   double sum_timers = 0;
   uint64_t timers[TIMERS_INIT_COUNT] = {0};
   unsigned long long commIdHash;
-  static __thread char archName[GCN_ARCH_NAME_LEN];
+  // static __thread char archName[GCN_ARCH_NAME_LEN];
+  char* archName;
   int cuCount;
   hipDeviceProp_t devProp;
 
@@ -2136,7 +2138,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   CUDACHECKGOTO(hipGetDeviceProperties(&devProp, cudaDev), res, fail);
   cuCount = devProp.multiProcessorCount;
-  snprintf(archName, GCN_ARCH_NAME_LEN, "%s", devProp.gcnArchName);
+  archName = strdup(devProp.gcnArchName);
 
   timers[TIMER_INIT_KERNELS] = clockNano();
   NCCLCHECK(ncclInitKernelsForDevice(cudaArch, maxSharedMem, &maxLocalSizeBytes));
