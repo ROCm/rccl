@@ -2120,7 +2120,6 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   double sum_timers = 0;
   uint64_t timers[TIMERS_INIT_COUNT] = {0};
   unsigned long long commIdHash;
-  // static __thread char archName[GCN_ARCH_NAME_LEN];
   char* archName;
   int cuCount;
   hipDeviceProp_t devProp;
