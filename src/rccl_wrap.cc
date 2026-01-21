@@ -24,8 +24,15 @@ THE SOFTWARE.
 #include "comm.h"
 #include "graph/topo.h"
 #include "enqueue.h"
-#include "rocm_smi/rocm_smi.h"
 #include <algorithm>
+#include "debug.h"
+
+#ifdef USE_AMDSMI
+#include "amd_smi/amdsmi.h"
+#else
+#include "rocm_smi/rocm_smi.h"
+#endif
+
 // Use this param to experiment pipelining new data types besides bfloat16
 // Make sure you generate the device code with the new data type (i.e. in generate.py)
 RCCL_PARAM(PipelineAllDTypes, "PIPELINE_ALL_DATA_TYPES", 0);
@@ -642,58 +649,52 @@ ncclResult_t commSetUnrollFactor(struct ncclComm* comm) {
   return ncclSuccess;
 }
 
-std::string trimString(const std::string& s) {
-  int sz = s.size();
-  int b = 0;
-  int e = sz - 1;
-  while (b < sz && isspace(s[b])) {
-    b++;
-  }
-  if (b >= sz) {
-    return "";
-  }
-
-  while (e >= b && e < sz && isspace(s[e])) {
-    e--;
-  }
-  if (b > e) {
-    return "";
-  }
-  return s.substr(b, e - b + 1);
-}
-
-std::vector<std::string> splitString(const std::string& s, char delimiter) {
-  std::vector<std::string> tokens;
-  std::stringstream ss(s);
-  std::string token;
-
-  while (std::getline(ss, token, delimiter)) {
-    tokens.push_back(trimString(token));
-  }
-  return tokens;
-}
-
-int parseFirmwareVersionImpl() {
+int getFirmwareVersion() {
   uint64_t fw_version = -1;
 
-  // using rocm-smi APIs for now to query MEC FW version
-  // will switch to amd-smi APIs soon
+#ifdef USE_AMDSMI
+  amdsmi_status_t ret;
+  ret = amdsmi_init(AMDSMI_INIT_AMD_GPUS);
+  if (ret != AMDSMI_STATUS_SUCCESS) {
+    ERROR("Could not initialize amd-smi");
+    return -1;
+  }
+
+  uint32_t socket_count = 0;
+  amdsmi_get_socket_handles(&socket_count, nullptr);
+  std::vector<amdsmi_socket_handle> sockets(socket_count);
+  amdsmi_get_socket_handles(&socket_count, sockets.data());
+
+  uint32_t num_gpus_per_socket = 0;
+  amdsmi_get_processor_handles(sockets[0], &num_gpus_per_socket, nullptr);
+  std::vector<amdsmi_processor_handle> processor_handles(num_gpus_per_socket);
+  amdsmi_get_processor_handles(sockets[0], &num_gpus_per_socket, processor_handles.data());
+
+  amdsmi_fw_info_t info;
+  ret = amdsmi_get_fw_info(processor_handles[0], &info);
+  if (ret != AMDSMI_STATUS_SUCCESS) {
+    ERROR("Could not query firmware info using amd-smi");
+    return -1;
+  }
+
+  fw_version = info.fw_info_list[0].fw_version;
+
+#else
   rsmi_status_t ret;
   ret = rsmi_init(0);
-  if (ret != RSMI_STATUS_SUCCESS) return -1;
+  if (ret != RSMI_STATUS_SUCCESS) {
+    ERROR("Could not initialize rocm-smi");
+    return -1;
+  }
+
   ret = rsmi_dev_firmware_version_get(0, RSMI_FW_BLOCK_MEC, &fw_version);
-  if (ret != RSMI_STATUS_SUCCESS) return -1;
+  if (ret != RSMI_STATUS_SUCCESS) {
+    ERROR("Could not query firmware info using rocm-smi");
+    return -1;
+  }
+#endif
 
   return fw_version;
-}
-
-int parseFirmwareVersion() {
-  int version = -1;
-  try {
-    version = parseFirmwareVersionImpl();
-  } catch (const std::exception& ex) {
-  }
-  return version;
 }
 
 bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, int firmwareVersion, char const* archName) {

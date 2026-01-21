@@ -115,6 +115,7 @@ __hidden ncclResult_t exampleProfilerInit(void** context, uint64_t commId, int* 
 
   // pre-allocate memory for event object pools in dedicated profiler context
   struct context* ctx = (struct context *)calloc(1, sizeof(*ctx));
+  if (ctx == nullptr) return ncclSystemError;
   ctx->commName = commName;
   ctx->commHash = commId;
   ctx->nranks = nranks;
