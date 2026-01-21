@@ -40,6 +40,10 @@ ncclResult_t ncclCudaContextTrack(struct ncclCudaContext** out) {
   while (1) {
     if (p == nullptr) {
       p = (struct ncclCudaContext*)calloc(1, sizeof(struct ncclCudaContext));
+      if (p == nullptr) {
+        result = ncclSystemError;
+        goto leave;
+      }
       p->refCount = 1;
       p->hcontext = hcontext;
       p->next = cxtListHead;
@@ -189,6 +193,10 @@ ncclResult_t ncclStrongStreamAcquire(
       cap = spare;
       if (cap == nullptr) {
         cap = (struct ncclStrongStreamCapture*)calloc(1, sizeof(struct ncclStrongStreamCapture));
+        if (cap == nullptr) {
+          ret = ncclSystemError;
+          goto do_unlock;
+        }
         CUDACHECKGOTO(cudaStreamCreateWithFlags(&cap->captureStream, cudaStreamNonBlocking), ret, do_unlock);
       }
       cap->graphId = graph.graphId;

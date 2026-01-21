@@ -123,7 +123,7 @@ bool validHsaScratchEnvSetting(const char*hsaScratchEnv, int hipRuntimeVersion, 
 
 // Direct ReduceScatter Limit
 RCCL_PARAM_DECLARE(DirectReduceScatterThreshold);
-int parseFirmwareVersion();
+int getFirmwareVersion();
 bool rcclIsArchSupportedForFunc(struct ncclTaskColl* info, char const* archName);
 #ifdef ENABLE_WARP_SPEED
 void rcclSetWarpSpeedCUs(struct ncclComm* comm, int algo, int threadsPerBlock, int& rcclWarpSpeedChannels);
