@@ -2116,7 +2116,7 @@ ib_recv:
     }
   }
 
-  useDmaBuf  = (rocmIbDmaBufSupport(lComm->dev) == ncclSuccess);
+  useDmaBuf  = (rocmIbDmaBufSupport(lComm->dev) == ncclSuccess && ncclParamDmaBufEnable());
   rComm->flushEnabled = ((rocmIbGdrSupport() == ncclSuccess || useDmaBuf)
                             && (ncclIbGdrFlushDisable == 0)) ? 1 : 0;
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
@@ -2335,6 +2335,10 @@ ncclResult_t rocmIbRegMrDmaBuf(void* comm, void* data, size_t size, int type, ui
   assert(size > 0);
   struct ncclIbNetCommBase* base = (struct ncclIbNetCommBase*) comm;
   struct ncclIbMrHandle* mhandleWrapper = (struct ncclIbMrHandle*) malloc(sizeof(struct ncclIbMrHandle));
+  if (mhandleWrapper == nullptr) {
+    WARN("Failed to allocate IB MR handle wrapper");
+    return ncclSystemError;
+  }
   for (int i = 0; i < base->vProps.ndevs; i++) {
     // Each ncclIbNetCommDevBase is at different offset in send and recv netComms
     struct ncclIbNetCommDevBase* devComm = rocmIbGetNetCommDevBase(base, i);

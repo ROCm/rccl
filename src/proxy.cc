@@ -96,6 +96,10 @@ static ncclResult_t expectedProxyResponseEnqueue(struct ncclProxyState* state, v
 
   // Pre-alloc response buffer
   ex->respBuff = malloc(respSize);
+  if (ex->respBuff == nullptr && respSize > 0) {
+    free(ex);
+    return ncclSystemError;
+  }
   ex->respSize = respSize;
   ex->res      = ncclInternalError;
   ex->done     = false;
@@ -1365,6 +1369,9 @@ ncclResult_t ncclPollProxyResponse(struct ncclComm* comm, struct ncclProxyConnec
       if (resp.opId != opId) {
         // Unexpected response, need to buffer the socket data
         respBuff = malloc(resp.respSize);
+        if (respBuff == nullptr) {
+          return ncclSystemError;
+        }
       }
       assert(respBuff != NULL);
       NCCLCHECK(ncclSocketRecv(sock, respBuff, resp.respSize));
@@ -1391,6 +1398,10 @@ ncclResult_t ncclProxyCallBlocking(struct ncclComm* comm, struct ncclProxyConnec
   // Alloc some memory to act as a handle
   ncclResult_t res = ncclSuccess;
   void* opId = malloc(1);
+  if (opId == nullptr) {
+    WARN("Failed to allocate proxy operation ID");
+    return ncclSystemError;
+  }
 
   NCCLCHECKGOTO(ncclProxyCallAsync(comm, proxyConn, type, reqBuff, reqSize, respSize, opId), res, fail);
 
