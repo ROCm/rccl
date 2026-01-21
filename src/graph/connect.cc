@@ -849,7 +849,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
       nc = maxNchannels = std::min(adjustedMaxNchannels * channelMultiplier, MAXCHANNELS);
     }
 
-    if (!userUpdatedMaxChannels && isGfx950 && singleNode && wsEnabled && comm->nRanks == 8) {
+    if (!userUpdatedMaxChannels && isGfx950 && singleNode && comm->nRanks == 8) {
       // For gfx950 single-node, use half the channels since they are doubled on a single node
       // Remove when all collectives have been optimized
       nc /= 2;
