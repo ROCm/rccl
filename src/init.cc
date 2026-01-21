@@ -2153,7 +2153,7 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
   archName = strdup(devProp.gcnArchName);
   if (!archName) {
     res = ncclSystemError;
-    WARN("strdup for architecture name");
+    WARN("strdup failed for architecture name");
     goto fail;
   }
 
