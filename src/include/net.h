@@ -30,6 +30,7 @@ extern ncclNet_t ncclNetIb;
 extern ncclNet_t ncclNetSocket;
 
 extern ncclResult_t rcclNetP2pPolicy(void* handle, int isP2p);
+extern int64_t ncclParamDmaBufEnable();
 
 #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
 extern ncclNet_t rocmNetIb;

@@ -1990,7 +1990,7 @@ ib_recv:
     }
   }
 
-  useDmaBuf  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess);
+  useDmaBuf  = (ncclIbDmaBufSupport(lComm->dev) == ncclSuccess && ncclParamDmaBufEnable());
   rComm->flushEnabled = ((ncclIbGdrSupport() == ncclSuccess || useDmaBuf)
                             && (ncclParamIbGdrFlushDisable() == 0)) ? 1 : 0;              
   for (int i = 0; i < rComm->base.vProps.ndevs; i++) {
