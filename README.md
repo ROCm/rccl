@@ -1,5 +1,8 @@
 # RCCL
 
+> [!CAUTION]
+> The rccl repository is retired, please use the [ROCm/rocm-systems](https://github.com/ROCm/rocm-systems) repository
+
 ROCm Communication Collectives Library
 
 [![RCCL](https://dev.azure.com/ROCm-CI/ROCm-CI/_apis/build/status%2Frccl?repoName=ROCm%2Frccl&branchName=develop)](https://dev.azure.com/ROCm-CI/ROCm-CI/_build/latest?definitionId=107&repoName=ROCm%2Frccl&branchName=develop)
