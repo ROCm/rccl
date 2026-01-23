@@ -33,6 +33,7 @@ option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"        
 option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+option(SPECIALIZED_KERNELS_ONLY                "Build only specialized kernels (no generic)"   OFF)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
@@ -889,6 +890,7 @@ if(ONLY_FUNCS)
 endif()
 
 # Execute the python script to generate required collective functions
+# (Always needed for host_table.cpp and device_table.h)
 execute_process(
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate.py ${GEN_DIR} ${IFC_ENABLED} ${COLLTRACE} ${ENABLE_MSCCL_KERNEL} ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -898,6 +900,28 @@ execute_process(
 if (gen_py_result)
   message(SEND_ERROR "Error: ${gen_py_error}")
   message(FATAL_ERROR "${CMAKE_SOURCE_DIR}/src/device/generate.py failed")
+endif()
+
+if (SPECIALIZED_KERNELS_ONLY)
+  message(STATUS "SPECIALIZED_KERNELS_ONLY mode: building only specialized kernels (no generic)")
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/device/generate_specialized.py ${GEN_DIR}/specialized ${BUILD_LOCAL_GPU_TARGET_ONLY} ${ONLY_FUNCS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE gen_specialized_result
+    ERROR_VARIABLE gen_specialized_error
+  )
+  if (gen_specialized_result)
+    message(WARNING "Specialized kernel generation failed: ${gen_specialized_error}")
+  else()
+    file(GLOB SPECIALIZED_KERNEL_FILES "${GEN_DIR}/specialized/*.cpp")
+    foreach(file ${SPECIALIZED_KERNEL_FILES})
+      list(APPEND HIP_SOURCES ${file})
+    endforeach()
+    if (SPECIALIZED_KERNEL_FILES)
+      set_source_files_properties(${SPECIALIZED_KERNEL_FILES} PROPERTIES COMPILE_OPTIONS "-fno-gpu-rdc")
+    endif()
+    message(STATUS "Specialized kernels: ${SPECIALIZED_KERNEL_FILES}")
+  endif()
 endif()
 
 if (GENERATE_SYM_KERNELS)
@@ -914,13 +938,25 @@ if (GENERATE_SYM_KERNELS)
   endif()
 endif()
 
-# Find the generated files in the output directory
-file(GLOB_RECURSE GENERATED_FILES "${GEN_DIR}/*")
-
-# Append all found generated files to the list
-foreach(file ${GENERATED_FILES})
-  list(APPEND HIP_SOURCES ${file})
-endforeach()
+# Find and add generated files
+if (SPECIALIZED_KERNELS_ONLY)
+  # Only add host_table.cpp (not device function .cpp files)
+  # Device functions are replaced by specialized kernels
+  # Note: device_table.h is a header, not a source file
+  list(APPEND HIP_SOURCES "${GEN_DIR}/host_table.cpp")
+  message(STATUS "SPECIALIZED_KERNELS_ONLY: using host_table.cpp from generate.py")
+  
+  
+  # Remove common.cu from HIP_SOURCES (it contains generic kernels)
+  list(FILTER HIP_SOURCES EXCLUDE REGEX ".*common\\.cu\\.cpp$")
+  message(STATUS "SPECIALIZED_KERNELS_ONLY: excluded common.cu (generic kernels)")
+else()
+  # Normal mode: add all generated files
+  file(GLOB_RECURSE GENERATED_FILES "${GEN_DIR}/*")
+  foreach(file ${GENERATED_FILES})
+    list(APPEND HIP_SOURCES ${file})
+  endforeach()
+endif()
 
 # Create an initial git_version.cpp file (that will be updated with latest git version)
 #==================================================================================================
@@ -996,6 +1032,11 @@ if(ENABLE_WARP_SPEED)
 endif()
 if(ENABLE_ROCSHMEM)
   target_compile_definitions(rccl PRIVATE ENABLE_ROCSHMEM)
+endif()
+if(SPECIALIZED_KERNELS_ONLY)
+  target_compile_definitions(rccl PRIVATE SPECIALIZED_KERNELS_ONLY)
+  target_include_directories(rccl PRIVATE ${GEN_DIR}/specialized)
+  message(STATUS "SPECIALIZED_KERNELS_ONLY mode enabled - using specialized kernel selector")
 endif()
 
 # ==== rocSHMEM integration (optional) ====
@@ -1218,7 +1259,9 @@ target_compile_options(rccl PRIVATE -Wall)
 target_compile_options(rccl PRIVATE -Werror=deprecated-copy-with-user-provided-copy)
 target_compile_options(rccl PRIVATE -Wno-format-nonliteral)
 target_compile_options(rccl PRIVATE -Wno-unused-function)
-target_compile_options(rccl PRIVATE -fgpu-rdc)
+if(NOT SPECIALIZED_KERNELS_ONLY)
+  target_compile_options(rccl PRIVATE -fgpu-rdc)
+endif()
 
 if(QUIET_WARNINGS)
   target_compile_options(rccl PRIVATE -Wno-invalid-offsetof)
@@ -1338,7 +1381,9 @@ endif()
 if (ROCTX_ENABLE)
   target_link_libraries(rccl PRIVATE ${ROCTX_LIB})
 endif()
-target_link_libraries(rccl PRIVATE   -fgpu-rdc)             # Required when linking relocatable device code
+if(NOT SPECIALIZED_KERNELS_ONLY)
+  target_link_libraries(rccl PRIVATE -fgpu-rdc)             # Required when linking relocatable device code
+endif()
 target_link_libraries(rccl PRIVATE   Threads::Threads)
 target_link_libraries(rccl INTERFACE hip::host)
 target_link_libraries(rccl PRIVATE   hip::device)
