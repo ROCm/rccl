@@ -1,0 +1,12 @@
+# Build directory
+build/
+
+# Compiled binary
+device_linker
+
+# Object files (build artifacts)
+*.o
+
+# Python cache
+__pycache__/
+*.pyc

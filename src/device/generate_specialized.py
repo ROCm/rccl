@@ -45,9 +45,8 @@ protos_of_coll = {
   "SendRecv":               ["SIMPLE"]
 }
 
-# Note: PreMulSum and SumPostDiv are excluded because they cause stack frame
-# size limit exceeded errors when compiled with -fno-gpu-rdc (required for performance)
-specialized_redops = ["Sum","Prod","MinMax"]
+# All reduction ops are now supported in specialized builds.
+specialized_redops = all_redops  # ["Sum","Prod","MinMax","PreMulSum","SumPostDiv"]
 
 redops_of_coll = {
   "AllGather":            ["Sum"],
@@ -298,8 +297,15 @@ def generate_specialized_kernel_file(op_tuple, output_dir):
   kernel_name = f"ncclDevKernel_{coll}_{algo}_{proto}_{redop}_{ty}{acc_suffix}_Specialized"
   guard = get_arch_guard(Fn(*op_tuple))
 
+  # Build ncclDevFunc name (matches production naming: Coll_ALGO_PROTO_Redop_ty_acc_pipeline_unroll)
+  devfunc_suffix = f"{coll}_{algo}_{proto}_{redop}_{ty}_{acc}_{pipeline}_{unroll}"
+
   # Build kernel code
-  kernel_code = f"""// Specialized kernel
+  kernel_code = f"""// ncclDevFunc - the noinline device function for this operation
+// This is the entry point that will be used by the device linker
+DEFINE_ncclDevFunc({devfunc_suffix}, {func_const}, {redop_class}, {cxx_type}, {algo_const}, {proto_const}, {acc}, {pipeline}, {unroll})
+
+// Specialized kernel (includes ncclDevFunc above, used for resource calculation)
 __launch_bounds__(NCCL_MAX_NTHREADS, 1)
 __global__ void {kernel_name}(
     ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage) {{

@@ -34,7 +34,14 @@ option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCC
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
 option(SPECIALIZED_KERNELS_ONLY                "Build only specialized kernels (no generic)"   OFF)
+option(DEVICE_LINKER_ENABLED                   "Use device linker for merged kernel dispatch"  OFF)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
+
+# DEVICE_LINKER_ENABLED requires SPECIALIZED_KERNELS_ONLY
+if (DEVICE_LINKER_ENABLED AND NOT SPECIALIZED_KERNELS_ONLY)
+  message(STATUS "DEVICE_LINKER_ENABLED implies SPECIALIZED_KERNELS_ONLY - enabling it")
+  set(SPECIALIZED_KERNELS_ONLY ON CACHE BOOL "Forced by DEVICE_LINKER_ENABLED" FORCE)
+endif()
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
 option(ROCTX                                   "Enable ROCTX"                                  ON)
@@ -940,12 +947,29 @@ endif()
 
 # Find and add generated files
 if (SPECIALIZED_KERNELS_ONLY)
-  # Only add host_table.cpp (not device function .cpp files)
+  # Only add host_table.cpp and device_table.cpp (not device function .cpp files)
   # Device functions are replaced by specialized kernels
-  # Note: device_table.h is a header, not a source file
   list(APPEND HIP_SOURCES "${GEN_DIR}/host_table.cpp")
-  message(STATUS "SPECIALIZED_KERNELS_ONLY: using host_table.cpp from generate.py")
+  list(APPEND HIP_SOURCES "${GEN_DIR}/device_table.cpp")  # Contains funcNames[] needed by init.cc
+  message(STATUS "SPECIALIZED_KERNELS_ONLY: using host_table.cpp and device_table.cpp from generate.py")
   
+  # If GENERATE_SYM_KERNELS is OFF, create stub for ncclSymkGetKernelPtr
+  if (NOT GENERATE_SYM_KERNELS)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/sym_kernels_stub.cpp"
+"// Stub for symmetric kernel functions when GENERATE_SYM_KERNELS is OFF
+#include \"sym_kernels.h\"
+#include \"nccl.h\"
+
+void* ncclSymkGetKernelPtr(ncclSymkKernelId /*kernelId*/, int /*red*/, ncclDataType_t /*ty*/) {
+  return nullptr;  // Symmetric kernels not enabled
+}
+
+int const ncclSymkKernelCount = 0;
+void* const ncclSymkKernelList[] = { nullptr };
+")
+    list(APPEND HIP_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/sym_kernels_stub.cpp")
+    message(STATUS "SPECIALIZED_KERNELS_ONLY: added sym_kernels_stub.cpp (GENERATE_SYM_KERNELS=OFF)")
+  endif()
   
   # Remove common.cu from HIP_SOURCES (it contains generic kernels)
   list(FILTER HIP_SOURCES EXCLUDE REGEX ".*common\\.cu\\.cpp$")
@@ -1231,6 +1255,63 @@ if (BUILD_BFD)
 endif()
 if (IFC_ENABLED)
   target_compile_definitions(rccl PRIVATE USE_INDIRECT_FUNCTION_CALL)
+endif()
+
+# Device linker mode - use merged kernels instead of specialized
+if (DEVICE_LINKER_ENABLED)
+  target_compile_definitions(rccl PRIVATE DEVICE_LINKER_ENABLED)
+  
+  set(DEVICE_LINKER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/device_linker)
+  set(MERGED_HOST_OBJ ${CMAKE_CURRENT_BINARY_DIR}/merged_final_host.o)
+  set(HIPCC_COMPILER /opt/rocm/bin/hipcc)
+  
+  # The device linker pipeline must run AFTER specialized .o files are compiled
+  # but BEFORE the final link. We use PRE_LINK to achieve this timing.
+  # The merged_final_host.o is created during PRE_LINK, then we link it using
+  # LINK_FLAGS instead of target_link_libraries to avoid dependency issues.
+  
+  add_custom_command(
+    TARGET rccl
+    PRE_LINK
+    # Step 0: Compile the dispatcher kernel (merged_minimal.hip) with --offload-compress
+    COMMAND ${HIPCC_COMPILER} -c -fPIC -fno-gpu-rdc --offload-arch=gfx942 --offload-compress
+            -I${CMAKE_CURRENT_BINARY_DIR}/hipify/src/include
+            -I${CMAKE_CURRENT_BINARY_DIR}/hipify/src/include/nccl_device
+            -I${CMAKE_CURRENT_BINARY_DIR}/hipify/src/device
+            ${DEVICE_LINKER_DIR}/merged_minimal.hip 
+            -o ${DEVICE_LINKER_DIR}/merged_minimal.o
+    # Step 0b: Extract HOST object (contains __hip_module_ctor registration code)
+    # Use --allow-missing-bundles since compressed .hip_fatbin format can't be unbundled directly
+    COMMAND /opt/rocm/llvm/bin/clang-offload-bundler --type=o 
+            --targets=host-x86_64-unknown-linux-gnu,hipv4-amdgcn-amd-amdhsa--gfx942
+            --input=${DEVICE_LINKER_DIR}/merged_minimal.o
+            --output=${DEVICE_LINKER_DIR}/host_only.o --output=/dev/null 
+            --unbundle --allow-missing-bundles
+    # Step 0c: Extract DEVICE object from compressed fatbin (needed by device_linker)
+    COMMAND ${Python3_EXECUTABLE} ${DEVICE_LINKER_DIR}/extract_device_from_fatbin.py
+            ${DEVICE_LINKER_DIR}/merged_minimal.o ${DEVICE_LINKER_DIR}/minimal_device.o gfx942
+    # Step 1: Run C++ device linker (replaces Python pipeline steps 1-6)
+    COMMAND ${DEVICE_LINKER_DIR}/device_linker
+            -o ${DEVICE_LINKER_DIR}/merged_device_final.o
+            --dispatcher ${DEVICE_LINKER_DIR}/minimal_device.o
+            --host-table ${CMAKE_CURRENT_BINARY_DIR}/hipify/gensrc/host_table.cpp
+            --input-dir ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/rccl.dir/hipify/gensrc/specialized/
+    # Step 7: Bundle host code with our merged device code
+    # This creates __CLANG_OFFLOAD_BUNDLE__* sections that the linker can process
+    COMMAND /opt/rocm/llvm/bin/clang-offload-bundler --type=o 
+            --targets=host-x86_64-unknown-linux-gnu,hipv4-amdgcn-amd-amdhsa--gfx942
+            --input=${DEVICE_LINKER_DIR}/host_only.o 
+            --input=${DEVICE_LINKER_DIR}/merged_device_final.o
+            --output=${MERGED_HOST_OBJ}
+    WORKING_DIRECTORY ${DEVICE_LINKER_DIR}
+    COMMENT "Running device linker pipeline to create merged kernel object"
+    VERBATIM
+  )
+  
+  # Add the merged object to link flags (instead of target_link_libraries to avoid dependency issues)
+  target_link_options(rccl PRIVATE ${MERGED_HOST_OBJ})
+  
+  message(STATUS "Device linker mode enabled - pipeline will run after specialized kernel compilation")
 endif()
 if(DEMANGLE_DIR)
   target_compile_definitions(rccl PRIVATE "HAVE_CPLUS_DEMANGLE=1")

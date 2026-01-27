@@ -25,7 +25,7 @@
 #include "ce_coll.h"
 #include "nvtx.h"
 #include "scheduler.h"
-#ifndef SPECIALIZED_KERNELS_ONLY
+#if !defined(SPECIALIZED_KERNELS_ONLY) || defined(DEVICE_LINKER_ENABLED)
 #include "common.h"
 #endif
 #include "api_trace.h"
@@ -51,7 +51,20 @@ struct ncclKernelMatch {
   bool specialized;
 };
 
-#ifndef SPECIALIZED_KERNELS_ONLY
+#if defined(DEVICE_LINKER_ENABLED)
+// Device linker mode: use merged generic kernel with fast-compiled specialized functions
+// The merged kernel dispatches via funcId like production, but functions were compiled in parallel
+__global__ void ncclDevKernel_Merged_1(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernel_Merged_2(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+__global__ void ncclDevKernel_Merged_4(ncclDevKernelArgsDefaultStorage NCCL_GRID_CONSTANT const argsStorage);
+
+#define ncclGetKernelIndex(p_comm) ((p_comm)->unroll)
+static ncclKernelMatch const ncclKerns[3] = {
+  {(void*)ncclDevKernel_Merged_1, false},  // false = dispatch via funcId (not specialized)
+  {(void*)ncclDevKernel_Merged_2, false},
+  {(void*)ncclDevKernel_Merged_4, false}
+};
+#elif !defined(SPECIALIZED_KERNELS_ONLY)
 // Generic kernels (not used when SPECIALIZED_KERNELS_ONLY is defined)
 #ifdef ENABLE_COLLTRACE
 #define ncclGetKernelIndex(p_comm) ((p_comm)->unroll + ((p_comm)->collTraceEnabled ? 3 : 0))
