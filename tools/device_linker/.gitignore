@@ -10,3 +10,7 @@ device_linker
 # Python cache
 __pycache__/
 *.pyc
+
+# Test files
+test_rccl_*
+test_tables*

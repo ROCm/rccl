@@ -291,8 +291,13 @@ KernelInfo processDeviceObject(const std::string& path) {
 // FuncId mapping from host_table.cpp
 // ============================================================================
 
-std::unordered_map<std::string, int> parseHostTable(const std::string& path) {
-    std::unordered_map<std::string, int> mapping;
+struct FuncIdMapping {
+    int func_id;
+    int unroll;  // 1, 2, or 4
+};
+
+std::unordered_map<std::string, FuncIdMapping> parseHostTable(const std::string& path) {
+    std::unordered_map<std::string, FuncIdMapping> mapping;
     
     std::ifstream file(path);
     if (!file) {
@@ -300,7 +305,7 @@ std::unordered_map<std::string, int> parseHostTable(const std::string& path) {
         return mapping;
     }
     
-    // Match: {key, id}, // Comment COLL ALGO PROTO REDOP TYPE ACC PIPELINE
+    // Match: {key, id}, // Comment COLL ALGO PROTO REDOP TYPE ACC PIPELINE UNROLL
     std::regex pattern(R"(\{(\d+),\s*(\d+)\},\s*//\s*(.+))");
     std::string line;
     
@@ -316,11 +321,13 @@ std::unordered_map<std::string, int> parseHostTable(const std::string& path) {
             std::string part;
             while (iss >> part) parts.push_back(part);
             
-            if (parts.size() >= 7) {
-                // Build lookup key: Coll_Algo_Proto_Redop_Type_Acc_Pipeline
+            if (parts.size() >= 8) {
+                // Build lookup key: Coll_Algo_Proto_Redop_Type_Acc_Pipeline_Unroll
+                // (includes unroll to match the mangled name exactly)
                 std::string key = parts[0] + "_" + parts[1] + "_" + parts[2] + "_" +
                                   parts[3] + "_" + parts[4] + "_" + parts[5] + "_" + parts[6];
-                mapping[key] = func_id;
+                int unroll = std::stoi(parts[7]);
+                mapping[key] = {func_id, unroll};
             }
         }
     }
@@ -328,16 +335,21 @@ std::unordered_map<std::string, int> parseHostTable(const std::string& path) {
     return mapping;
 }
 
-// Demangle to extract function name components
-std::string demangleToKey(const std::string& mangled) {
+// Demangle to extract function name components and unroll factor
+struct DemangleResult {
+    std::string key;  // Coll_Algo_Proto_Redop_Type_Acc_Pipeline (without unroll)
+    int unroll;       // 1, 2, or 4
+};
+
+DemangleResult demangleToKey(const std::string& mangled) {
     // _Z48ncclDevFunc_AllReduce_RING_LL_Sum_f32_0_0_2v
-    // -> AllReduce_RING_LL_Sum_f32_0_0
+    // -> key: AllReduce_RING_LL_Sum_f32_0_0, unroll: 2
     
-    if (mangled.substr(0, 2) != "_Z") return "";
+    if (mangled.substr(0, 2) != "_Z") return {"", 0};
     
     size_t i = 2;
     while (i < mangled.size() && isdigit(mangled[i])) i++;
-    if (i == 2) return "";
+    if (i == 2) return {"", 0};
     
     int len = std::stoi(mangled.substr(2, i - 2));
     std::string name = mangled.substr(i, len);
@@ -349,22 +361,24 @@ std::string demangleToKey(const std::string& mangled) {
     }
     
     // Parse: AllReduce_RING_LL_Sum_f32_0_0_2
-    // Remove trailing unroll number for lookup
     auto parts = std::vector<std::string>();
     std::istringstream iss(name);
     std::string part;
     while (std::getline(iss, part, '_')) parts.push_back(part);
     
-    if (parts.size() < 8) return "";
+    if (parts.size() < 8) return {"", 0};
     
-    // Rebuild without the last part (unroll)
+    // Extract unroll (last part)
+    int unroll = std::stoi(parts.back());
+    
+    // Rebuild key without the last part (unroll)
     std::string key;
     for (size_t j = 0; j < parts.size() - 1; j++) {
         if (j > 0) key += "_";
         key += parts[j];
     }
     
-    return key;
+    return {key, unroll};
 }
 
 // ============================================================================
@@ -643,34 +657,68 @@ int main(int argc, char** argv) {
     uint64_t func_code_vaddr = disp_text->addr + disp_text_data.size();
     printf("Function code starts at vaddr 0x%lx\n", func_code_vaddr);
     
-    // Build function table and append code
-    std::vector<uint64_t> func_table(FUNC_COUNT, 0);
+    // Build function tables (one per unroll factor) and append code
+    // Layout: table_1[FUNC_COUNT], table_2[FUNC_COUNT], table_4[FUNC_COUNT]
+    std::vector<uint64_t> func_table_1(FUNC_COUNT, 0);
+    std::vector<uint64_t> func_table_2(FUNC_COUNT, 0);
+    std::vector<uint64_t> func_table_4(FUNC_COUNT, 0);
     int mapped_count = 0;
+    int mapped_unroll_1 = 0, mapped_unroll_2 = 0, mapped_unroll_4 = 0;
     size_t total_code_size = 0;
     
     std::vector<std::string> unmapped;
-    int empty_name = 0, empty_code = 0, out_of_range = 0;
+    int empty_name = 0, empty_code = 0, out_of_range = 0, bad_unroll = 0;
     for (const auto& k : kernels) {
         if (k.mangled_name.empty()) { empty_name++; continue; }
         if (k.code.empty()) { empty_code++; continue; }
         
-        std::string key = demangleToKey(k.mangled_name);
+        auto [key, unroll] = demangleToKey(k.mangled_name);
+        if (key.empty()) {
+            unmapped.push_back(k.mangled_name + " -> failed to demangle");
+            continue;
+        }
+        
         auto it = funcid_map.find(key);
         if (it == funcid_map.end()) {
             unmapped.push_back(k.mangled_name + " -> key='" + key + "'");
             continue;
         }
         
-        int funcid = it->second;
+        int funcid = it->second.func_id;
+        int expected_unroll = it->second.unroll;
+        
         if (funcid < 0 || funcid >= FUNC_COUNT) {
             out_of_range++;
             continue;
         }
         
+        // Verify unroll matches
+        if (unroll != expected_unroll) {
+            fprintf(stderr, "Warning: unroll mismatch for %s: got %d, expected %d\n",
+                    k.mangled_name.c_str(), unroll, expected_unroll);
+        }
+        
         // Record function address (current end of .text section)
         uint64_t func_vaddr = disp_text->addr + disp_text_data.size();
         
-        func_table[funcid] = func_vaddr;
+        // Store in the appropriate table based on unroll factor
+        switch (unroll) {
+            case 1:
+                func_table_1[funcid] = func_vaddr;
+                mapped_unroll_1++;
+                break;
+            case 2:
+                func_table_2[funcid] = func_vaddr;
+                mapped_unroll_2++;
+                break;
+            case 4:
+                func_table_4[funcid] = func_vaddr;
+                mapped_unroll_4++;
+                break;
+            default:
+                bad_unroll++;
+                continue;
+        }
         
         // Append code
         disp_text_data.insert(disp_text_data.end(), k.code.begin(), k.code.end());
@@ -684,8 +732,10 @@ int main(int argc, char** argv) {
         mapped_count++;
     }
     
-    printf("Mapped %d functions, total code size: %zu bytes\n", mapped_count, total_code_size);
-    printf("Skipped: %d empty name, %d empty code, %d out of range funcId\n", empty_name, empty_code, out_of_range);
+    printf("Mapped %d functions (unroll1=%d, unroll2=%d, unroll4=%d), total code size: %zu bytes\n", 
+           mapped_count, mapped_unroll_1, mapped_unroll_2, mapped_unroll_4, total_code_size);
+    printf("Skipped: %d empty name, %d empty code, %d out of range, %d bad unroll\n", 
+           empty_name, empty_code, out_of_range, bad_unroll);
     fflush(stdout);
     
     if (!unmapped.empty()) {
@@ -703,10 +753,11 @@ int main(int argc, char** argv) {
     size_t table_size = FUNC_COUNT * 8;
     std::vector<uint8_t> data_section(table_size * 3, 0);
     
-    // Populate table_2 (middle table, for unroll=2)
-    size_t table_2_offset = table_size;
+    // Populate all three tables
     for (int i = 0; i < FUNC_COUNT; i++) {
-        memcpy(data_section.data() + table_2_offset + i * 8, &func_table[i], 8);
+        memcpy(data_section.data() + i * 8, &func_table_1[i], 8);
+        memcpy(data_section.data() + table_size + i * 8, &func_table_2[i], 8);
+        memcpy(data_section.data() + table_size * 2 + i * 8, &func_table_4[i], 8);
     }
     
     // Build output ELF
