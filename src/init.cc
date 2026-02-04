@@ -537,6 +537,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   free(comm->topParentRanks);
   free(comm->topParentLocalRanks);
   free(comm->gproxyConn);
+  free(comm->archName);
 
   NCCLCHECK(ncclRegCleanup(comm));
 
@@ -2007,8 +2008,12 @@ static ncclResult_t ncclCommInitRankFunc(struct ncclAsyncJob* job_) {
 
   CUDACHECKGOTO(hipGetDeviceProperties(&devProp, cudaDev), res, fail);
   cuCount = devProp.multiProcessorCount;
-  archName = (char*)malloc(strlen(devProp.gcnArchName) + 1);
-  strcpy(archName, devProp.gcnArchName);
+  archName = strdup(devProp.gcnArchName);
+  if (!archName) {
+    res = ncclSystemError;
+    WARN("strdup failed for architecture name");
+    goto fail;
+  }
 
   timers[TIMER_INIT_KERNELS] = clockNano();
   NCCLCHECK(ncclInitKernelsForDevice(cudaArch, maxSharedMem, &maxLocalSizeBytes));
