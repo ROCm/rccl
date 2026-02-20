@@ -126,3 +126,4 @@ See:
 
     src/include/latency_profiler
     src/misc/latency_profiler
+    src/commDump.cc
