@@ -1988,9 +1988,9 @@ ib_recv:
     if (rComm->flushEnabled) {
       if (rcclParamRocmIbGdrFlushGpuMemNoRelaxedOrdering()) {
 #if defined(HIP_UNCACHED_MEMORY)
-        NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), hipDeviceMallocUncached), ret, fail);
+        NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocUncached), ret, fail);
 #else
-        NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), hipDeviceMallocFinegrained), ret, fail);
+        NCCLCHECKGOTO(ncclCudaCalloc(&rCommDev->gpuFlush.gpuFlushGpuMem, sizeof(int), nullptr, hipDeviceMallocFinegrained), ret, fail);
 #endif
         if (useDmaBuf)
         {
