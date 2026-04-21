@@ -110,6 +110,20 @@ static int ncclIbRelaxedOrderingEnabled = 0;
 
 #define NCCL_IB_LLSTR(ll) (((ll) == IBV_LINK_LAYER_INFINIBAND) ? "IB" : (((ll) == IBV_LINK_LAYER_ETHERNET) ? "RoCE" : "UNSPECIFIED"))
 
+static const char* ncclIbPortStateStr(uint8_t state) {
+  switch (state) {
+    case IBV_PORT_NOP: return "NOP";
+    case IBV_PORT_DOWN: return "DOWN";
+    case IBV_PORT_INIT: return "INIT";
+    case IBV_PORT_ARMED: return "ARMED";
+    case IBV_PORT_ACTIVE: return "ACTIVE";
+#ifdef IBV_PORT_ACTIVE_DEFER
+    case IBV_PORT_ACTIVE_DEFER: return "ACTIVE_DEFER";
+#endif
+    default: return "UNKNOWN";
+  }
+}
+
 #define NCCL_IB_SL_DEFAULT 0
 #define NCCL_IB_TC_DEFAULT 0
 
@@ -822,6 +836,9 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction, ncclProfilerCallback_t pr
           }
           continue;
         }
+        if (devAttr.phys_port_cnt == 0) {
+          INFO(NCCL_NET, "NET/IB : Device %s reports phys_port_cnt=0, no ports to probe", devices[d]->name);
+        }
         for (int port_num = 1; port_num <= devAttr.phys_port_cnt; port_num++) {
           // dataDirect = 0 exposes the devices normally, dataDirect = 1 exposes the devices through direct NIC
           for (int dataDirect = skipNetDevForDataDirect; dataDirect < 1 + dataDirectSupported; ++dataDirect) {
@@ -830,12 +847,25 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction, ncclProfilerCallback_t pr
               WARN("NET/IB : Unable to query port_num %d", port_num);
               continue;
             }
-            if (portAttr.state != IBV_PORT_ACTIVE) continue;
+            if (portAttr.state != IBV_PORT_ACTIVE) {
+              if (dataDirect == skipNetDevForDataDirect)
+                INFO(NCCL_NET, "NET/IB : Skipping %s:%d: port state is %s (%u), need ACTIVE",
+                     devices[d]->name, port_num, ncclIbPortStateStr(portAttr.state), (unsigned)portAttr.state);
+              continue;
+            }
             if (portAttr.link_layer != IBV_LINK_LAYER_INFINIBAND
-                && portAttr.link_layer != IBV_LINK_LAYER_ETHERNET) continue;
+                && portAttr.link_layer != IBV_LINK_LAYER_ETHERNET) {
+              if (dataDirect == skipNetDevForDataDirect)
+                INFO(NCCL_NET, "NET/IB : Skipping %s:%d: link layer is %s (%d), need IB or Ethernet",
+                     devices[d]->name, port_num, NCCL_IB_LLSTR(portAttr.link_layer), portAttr.link_layer);
+              continue;
+            }
 
             // check against user specified HCAs/ports
             if (! (matchIfList(devices[d]->name, port_num, userIfs, nUserIfs, searchExact) ^ searchNot)) {
+              if (nUserIfs > 0 && dataDirect == skipNetDevForDataDirect)
+                INFO(NCCL_NET, "NET/IB : Skipping %s:%d: does not match NCCL_IB_HCA (exact=%d exclude=%d)",
+                     devices[d]->name, port_num, searchExact ? 1 : 0, searchNot ? 1 : 0);
               continue;
             }
             pthread_mutex_init(&ncclIbDevs[ncclNIbDevs].lock, NULL);
