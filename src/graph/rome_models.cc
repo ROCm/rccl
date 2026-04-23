@@ -1262,6 +1262,9 @@ static struct rcclRomeModel romeTopoModels[] = {
   rome_model_87, /* 43 */
 };
 
+static_assert(sizeof(romeTopoModels)/sizeof(romeTopoModels[0]) > (size_t)RCCL_ROME_TOPO_PRESET_MODEL_4H4P_IDX,
+  "romeTopoModels[] ordering: rome_model_68 must stay at RCCL_ROME_TOPO_PRESET_MODEL_4H4P_IDX for parse4H4P");
+
 // This environment variable allows disabling of the reversal the graph parsing
 RCCL_PARAM(ModelReversalDisable, "MODEL_REVERSAL_DISABLE", 0);
 
@@ -1531,6 +1534,17 @@ static void parseOptions(struct ncclTopoSystem* system, const char *options) {
     }
     free(str_temp);
   }
+}
+
+static ncclResult_t rcclTopoSetPresetRomeModelIdx(struct ncclTopoSystem* system, int idx) {
+  if (system->romeTopoModelIdx == RCCL_ROME_TOPO_PRESET_MODEL_IDX_NONE) {
+    system->romeTopoModelIdx = idx;
+  } else if (system->romeTopoModelIdx != idx) {
+    WARN("RCCL: conflicting preset Rome topology model index on this node (already %d, attempted %d).",
+         system->romeTopoModelIdx, idx);
+    return ncclInvalidUsage;
+  }
+  return ncclSuccess;
 }
 
 static bool checkOption(const char *options, const char *name) {
@@ -2098,6 +2112,10 @@ ncclResult_t parseA2a8P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
     break;
   }
 
+  if (graph->nChannels) {
+    NCCLCHECK(rcclTopoSetPresetRomeModelIdx(system, i));
+  }
+
   // clean up
   free(all_gpu_permutations);
   return ncclSuccess;
@@ -2281,6 +2299,9 @@ ncclResult_t parseRome4P2H(struct ncclTopoSystem* system, struct ncclTopoGraph* 
     }
     break;
   }
+  if (graph->nChannels) {
+    NCCLCHECK(rcclTopoSetPresetRomeModelIdx(system, i));
+  }
   return ncclSuccess;
 }
 
@@ -2418,6 +2439,9 @@ ncclResult_t parse1H16P(struct ncclTopoSystem* system, struct ncclTopoGraph* gra
   NCCLCHECK(parseGraph(romeTopoModels[i].ringBase, system, graph, rdm, nnets > 1 ? n : NULL, false));
 
   if (romeTopoModels[i].treeBase != nullptr) NCCLCHECK(parseGraphLight(romeTopoModels[i].treeBase, system, graph, rdm));
+  if (graph->nChannels) {
+    NCCLCHECK(rcclTopoSetPresetRomeModelIdx(system, i));
+  }
   // clean up
   free(all_gpu_permutations);
   return ncclSuccess;
@@ -2538,6 +2562,9 @@ ncclResult_t parse4H4P(struct ncclTopoSystem* system, struct ncclTopoGraph* grap
   parseOptions(system, rome_model_68.options);
   // create 4P4H based on reference and remapped ids
   NCCLCHECK(parseGraph(rome_model_68.ringBase, system, graph, rdm, n_hives.data(), false));
+  if (graph->nChannels) {
+    NCCLCHECK(rcclTopoSetPresetRomeModelIdx(system, RCCL_ROME_TOPO_PRESET_MODEL_4H4P_IDX));
+  }
   return ncclSuccess;
 }
 
@@ -2616,6 +2643,9 @@ ncclResult_t parseGIOTopos(struct ncclTopoSystem* system, struct ncclTopoGraph* 
   system->type |= RCCL_TOPO_4P2H_ROME;
 
   NCCLCHECKGOTO(parseGraph(gio16gColumbaModel.ringBase, system, graph, rdm, NULL, false), r, exit);
+  if (graph->nChannels) {
+    NCCLCHECK(rcclTopoSetPresetRomeModelIdx(system, RCCL_ROME_TOPO_PRESET_MODEL_IDX_GIO_COLUMBA));
+  }
 
 exit:
   return ncclSuccess;
