@@ -46,7 +46,7 @@ index 7af56a6c..5c3e3d46 100644
  NCCL_PARAM(IbDataDirect,"IB_DATA_DIRECT",1);
  NCCL_PARAM(IbQpsPerConn, "IB_QPS_PER_CONNECTION", 1);
  RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 0);
-+NCCL_PARAM(IbGdrFlushDisable, "GDR_FLUSH_DISABLE", 0);
++NCCL_PARAM(IbGdrFlushDisable, "GDR_FLUSH_DISABLE", 1);
 +
 +// AMD AINIC
 +RCCL_PARAM(CtsInlineData, "CTS_INLINE_DATA", -1);
@@ -82,7 +82,7 @@ index 7af56a6c..5c3e3d46 100644
 +      // for AINIC IbUseInline is enabled by default always
 +      ncclIbUseInline = true;
 +      // for AINIC GDR flush is disabled by default
-+      ncclIbGdrFlushDisable = 1;
++      // ncclIbGdrFlushDisable = 1;
 +
 +      INFO(NCCL_INIT|NCCL_NET, "NET/IB : AINIC RoCEv2 optimizations enabled: CTS Inline Data: %s; CTS Offload: %s; "
 +           "IB Use Inline: enabled; GDR Flush: disabled", rcclCtsInlineData ? "Enabled": "Disabled",
