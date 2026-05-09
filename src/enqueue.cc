@@ -28,6 +28,7 @@
 #include <cinttypes> // PRIx64
 #include <cassert>
 #include "latency_profiler/CollTraceFunc.h"
+#include "device.h"
 
 using namespace rccl;
 
@@ -349,11 +350,16 @@ static bool testBudget(
   return ok;
 }
 
-// Returns whether this should be disabled at the device level.  Should be called after devWork fields have been set for what
-// it depends on.
-bool gfx9CheapFenceOff(const ncclDevWorkColl& devWork, bool disabledByPrecheck){
-    bool fenceOk = devWork.regUsed == 0 && devWork.netRegUsed == 0 && !disabledByPrecheck;
-    return !fenceOk;
+// Resolves ncclGfx9PostPeerFenceMode for device postPeer; call after regUsed/netRegUsed are set.
+static int ncclResolveGfx9CheapFenceMode(struct ncclComm* comm, struct ncclDevWorkColl const& devWork) {
+  int mode = comm->gfx9CheapFenceMode;
+  if (mode < ncclGfx9PostPeerFenceCheap || mode > ncclGfx9PostPeerFenceSystem)
+    mode = ncclGfx9PostPeerFenceCheap;
+  bool const fenceOk = devWork.regUsed == 0 && devWork.netRegUsed == 0;
+  if (!fenceOk && mode == ncclGfx9PostPeerFenceCheap) {
+    return IsArchMatch(comm->archName, "gfx9") ? ncclGfx9PostPeerFenceThread : ncclGfx9PostPeerFenceSystem;
+  }
+  return mode;
 }
 
 ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
@@ -393,12 +399,12 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
 	  
     devWork.isOneRPN = comm->isOneRPN;
     devWork.netRegUsed = devWork.regUsed = 0;
-    devWork.gfx9CheapFenceOff = gfx9CheapFenceOff(devWork, comm->gfx9CheapFenceOff);
     devWork.profilerEnabled = ncclProfilerPluginLoaded() && (task->eActivationMask & ncclProfileKernelCh);
     if (task->regBufType & NCCL_NET_REG_BUFFER)
       devWork.netRegUsed = 1;
     if (task->regBufType & (NCCL_IPC_REG_BUFFER | NCCL_NVLS_REG_BUFFER))
       devWork.regUsed = 1;
+    devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork);
 
     if (task->regBufType & NCCL_NVLS_REG_BUFFER) {
       struct ncclDevWorkCollReg workReg = {};
@@ -607,6 +613,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         devWork.netRegUsed = 1;
       if (task->regBufType & (NCCL_IPC_REG_BUFFER | NCCL_NVLS_REG_BUFFER))
         devWork.regUsed = 1;
+      devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork);
       devWork.pivotA2ANumBiRings = comm->topo->pivotA2ANumBiRings;
       devWork.opCount = task->opCount;
 

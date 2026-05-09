@@ -351,12 +351,26 @@ inline __device__ int ncclP2pChannelToPart(int nP2pChannels, int base, int chann
   }
 }
 
+// RCCL_GFX9_CHEAP_FENCE_OFF (RCCL_*): 0 = cheap post-peer fence, 1 = __threadfence, 2 = __threadfence_system
+enum ncclGfx9PostPeerFenceMode {
+  ncclGfx9PostPeerFenceCheap = 0,
+  ncclGfx9PostPeerFenceThread = 1,
+  ncclGfx9PostPeerFenceSystem = 2
+};
+
+// RCCL_GFX9_BARRIER (RCCL_*): Primitives::barrier() fence — 0 = __threadfence_block, 1 = __threadfence, 2 = __threadfence_system
+enum ncclGfx9BarrierFenceMode {
+  ncclGfx9BarrierFenceBlock = 0,
+  ncclGfx9BarrierFenceThread = 1,
+  ncclGfx9BarrierFenceSystem = 2
+};
+
 struct alignas(16) ncclDevWorkColl {
   // Running on channels [channelLo..channelHi], hi is inclusive.
   //   nChannels == (channelHi - channelLo) + 1
   uint32_t channelLo:8, channelHi:8;
   uint32_t nWarps:8;
-  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx9CheapFenceOff:1;
+  uint32_t redOpArgIsPtr:1, regUsed:1, netRegUsed:1, oneNode:1, direct:2, isOneRPN:1, rcclUseOneSlice:1, gfx9CheapFenceMode:2;
   uint32_t root:30, connIndex:2;
   uint16_t pivotA2ANumBiRings:15, profilerEnabled:1;
   void* recvbuff;
@@ -573,6 +587,7 @@ struct ncclDevComm {
   int p2pChunkSize;
   int isAllNvlink;
   int p2pnChannelsPerPeer;
+  int gfx9BarrierMode; // ncclGfx9BarrierFenceMode
 
   int* collNetDenseToUserRank;
 

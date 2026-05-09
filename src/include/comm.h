@@ -504,7 +504,8 @@ struct ncclComm {
   int node;
   int nNodes;
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
-  int gfx9CheapFenceOff; // RCCL: true if gfx9 cheap fence is disabled
+  int gfx9CheapFenceMode; // RCCL: ncclGfx9PostPeerFenceMode (0 cheap, 1 threadfence, 2 threadfence_system)
+  int gfx9BarrierMode; // RCCL: ncclGfx9BarrierFenceMode for ProtoSimple barrier()
   int localRank;
   int localRanks;
   int maxLocalRanks;
