@@ -522,6 +522,7 @@ static ncclResult_t socketFinalizeAccept(struct ncclSocket* sock) {
     }
     if (magic != sock->magic) {
       socketResetAccept(sock);
+      sock->state = ncclSocketStateBadMagic;
       return ncclSuccess;
     }
   }
@@ -662,6 +663,12 @@ static ncclResult_t socketFinalizeConnect(struct ncclSocket* sock) {
 }
 
 static ncclResult_t socketProgressState(struct ncclSocket* sock) {
+  // BadMagic is set by socketFinalizeAccept on magic mismatch. The reset in
+  // ncclSocketAccept's do-while only fires while that loop runs; this covers
+  // the path where a caller re-enters via ncclSocketReady with state=BadMagic.
+  if (sock->state == ncclSocketStateBadMagic) {
+    sock->state = ncclSocketStateAccepting;
+  }
   if (sock->state == ncclSocketStateAccepting) {
     NCCLCHECK(socketTryAccept(sock));
   }
@@ -743,7 +750,7 @@ ncclResult_t ncclSocketConnect(struct ncclSocket* sock) {
   }
 }
 
-ncclResult_t ncclSocketAccept(struct ncclSocket* sock, struct ncclSocket* listenSock) {
+ncclResult_t ncclSocketAccept(struct ncclSocket* sock, struct ncclSocket* listenSock, bool retryOnBadMagic) {
   ncclResult_t ret = ncclSuccess;
 
   if (listenSock == NULL || sock == NULL) {
@@ -769,6 +776,9 @@ ncclResult_t ncclSocketAccept(struct ncclSocket* sock, struct ncclSocket* listen
 
   do {
     NCCLCHECKGOTO(socketProgressState(sock), ret, exit);
+    if (sock->state == ncclSocketStateBadMagic && retryOnBadMagic) {
+      sock->state = ncclSocketStateAccepting;
+    }
   } while (sock->asyncFlag == 0 &&
       (sock->abortFlag == NULL || __atomic_load_n(sock->abortFlag, __ATOMIC_ACQUIRE) == 0) &&
       (sock->state == ncclSocketStateAccepting ||
@@ -780,6 +790,7 @@ ncclResult_t ncclSocketAccept(struct ncclSocket* sock, struct ncclSocket* listen
     case ncclSocketStateAccepting:
     case ncclSocketStateAccepted:
     case ncclSocketStateReady:
+    case ncclSocketStateBadMagic:
       ret = ncclSuccess;
       break;
     case ncclSocketStateError:
