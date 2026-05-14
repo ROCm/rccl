@@ -64,6 +64,11 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata,
 
   uint64_t* barriers;
   uint64_t barrier_next = 0;
+#if defined(__GFX9__)
+  uint8_t gfx9CheapFenceMode = ncclGfx9PostPeerFenceThread;
+#else
+  uint8_t gfx9CheapFenceMode = ncclGfx9PostPeerFenceSystem;
+#endif
 
 #if defined(ENABLE_NPKIT)
 public:
@@ -139,14 +144,18 @@ private:
     if (recvConnHeadPtr) STORE(recvConnHeadPtr, recvConnHead += 1);
   }
   inline __device__ void postSend() {
-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
-    asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)");
-    __atomic_signal_fence(__ATOMIC_SEQ_CST);
-
     if (sendConnTailPtr) {
-#if __CUDA_ARCH__ >= 900
-      __threadfence_system();
-#endif
+      if (gfx9CheapFenceMode == ncclGfx9PostPeerFenceCheap) {
+        __atomic_signal_fence(__ATOMIC_SEQ_CST);
+        asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)");
+        __atomic_signal_fence(__ATOMIC_SEQ_CST);
+      } else {
+        if (gfx9CheapFenceMode == ncclGfx9PostPeerFenceThread) {
+          __threadfence();
+        } else {
+          __threadfence_system();
+        }
+      }
       STORE((unsigned long long *)sendConnTailPtr, sendConnTail += 1);
     }
   }
@@ -598,6 +607,7 @@ public:
     // coverity[var_deref_model:FALSE]
     loadSendSync();
     setDataPtrs(inputBuf, outputBuf, e != nullptr ? e->acc : nullptr);
+    if (e) gfx9CheapFenceMode = (uint8_t)e->gfx9CheapFenceMode;
   }
 
   __device__ ~Primitives() {
