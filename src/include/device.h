@@ -311,6 +311,7 @@ struct alignas(16) ncclDevWorkP2p {
   uint8_t profilerEnabled:1;
 
   uint8_t sendConnIndex:2, recvConnIndex:2;
+  uint8_t gfx9CheapFenceMode:2;
 };
 
 // Compute the subset of the data transfer corresponding to the given part index.

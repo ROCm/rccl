@@ -885,6 +885,8 @@ public:
     }
     if (collWork) {
       gfx9CheapFenceMode = (uint8_t)collWork->gfx9CheapFenceMode;
+    } else if (p2pWork) {
+      gfx9CheapFenceMode = (uint8_t)p2pWork->gfx9CheapFenceMode;
     }
   }
 

@@ -350,12 +350,12 @@ static bool testBudget(
   return ok;
 }
 
-// Resolves ncclGfx9PostPeerFenceMode for device postPeer; call after regUsed/netRegUsed are set.
-static int ncclResolveGfx9CheapFenceMode(struct ncclComm* comm, struct ncclDevWorkColl const& devWork) {
+// Resolves ncclGfx9PostPeerFenceMode for device postPeer; call after regUsed/netRegUsed are known (0/1).
+static int ncclResolveGfx9CheapFenceMode(struct ncclComm* comm, int regUsed, int netRegUsed) {
   int mode = comm->gfx9CheapFenceMode;
   if (mode < ncclGfx9PostPeerFenceCheap || mode > ncclGfx9PostPeerFenceSystem)
     mode = ncclGfx9PostPeerFenceCheap;
-  bool const fenceOk = devWork.regUsed == 0 && devWork.netRegUsed == 0;
+  bool const fenceOk = regUsed == 0 && netRegUsed == 0;
   if (!fenceOk && mode == ncclGfx9PostPeerFenceCheap) {
     return IsArchMatch(comm->archName, "gfx9") ? ncclGfx9PostPeerFenceThread : ncclGfx9PostPeerFenceSystem;
   }
@@ -404,7 +404,7 @@ ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm* comm) {
       devWork.netRegUsed = 1;
     if (task->regBufType & (NCCL_IPC_REG_BUFFER | NCCL_NVLS_REG_BUFFER))
       devWork.regUsed = 1;
-    devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork);
+    devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork.regUsed, devWork.netRegUsed);
 
     if (task->regBufType & NCCL_NVLS_REG_BUFFER) {
       struct ncclDevWorkCollReg workReg = {};
@@ -613,7 +613,7 @@ ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool
         devWork.netRegUsed = 1;
       if (task->regBufType & (NCCL_IPC_REG_BUFFER | NCCL_NVLS_REG_BUFFER))
         devWork.regUsed = 1;
-      devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork);
+      devWork.gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm, devWork.regUsed, devWork.netRegUsed);
       devWork.pivotA2ANumBiRings = comm->topo->pivotA2ANumBiRings;
       devWork.opCount = task->opCount;
 
@@ -1125,6 +1125,9 @@ static ncclResult_t addP2pToPlan(
   work->profilerEnabled = ncclProfilerPluginLoaded() && ((p2pTasks[0] ? p2pTasks[0] : p2pTasks[1])->eActivationMask & ncclProfileKernelCh);
   work->recvConnIndex = connIndex[0];
   work->recvOpCount = recvOpCount;
+  work->gfx9CheapFenceMode = ncclResolveGfx9CheapFenceMode(comm,
+      (work->sendIpcReg || work->recvIpcReg) ? 1 : 0,
+      (work->sendNetReg || work->recvNetReg) ? 1 : 0);
 
   struct ncclProxyOp proxyOps[2] = {};
   int nProxyOps = selfSend ? 0 : 2;
