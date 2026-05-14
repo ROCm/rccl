@@ -115,7 +115,7 @@ RCCL_PARAM(MscclppForceEnabled, "MSCCLPP_FORCE_ENABLE", 0);
 // RCCL_GFX9_CHEAP_FENCE_OFF: 0 = arch-tuned default, 1 = __threadfence, 2 = __threadfence_system
 RCCL_PARAM(Gfx9CheapFenceOff, "GFX9_CHEAP_FENCE_OFF", 2);
 // RCCL_GFX9_BARRIER: ProtoSimple barrier() — 0 = __threadfence_block, 1 = __threadfence, 2 = __threadfence_system
-RCCL_PARAM(Gfx9Barrier, "GFX9_BARRIER", 0);
+RCCL_PARAM(Gfx9Barrier, "GFX9_BARRIER", 2);
 
 // GDRCOPY support: Off by default
 NCCL_PARAM(GdrCopyEnable, "GDRCOPY_ENABLE", 0);
