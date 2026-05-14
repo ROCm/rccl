@@ -16,7 +16,7 @@ build: ${BUILDDIR}/librccl-profiler.so
 ${BUILDDIR}/librccl-profiler.so: ${SRC_FILES}
 	@printf "Compiling  %-35s > %s\n" $< $@
 	@mkdir -p ${BUILDDIR}
-	$(CC) -Inccl -fPIC -shared -o $@ $^
+	$(CC) -Inccl -fPIC -shared -g -o $@ $^
 
 clean:
 	rm -f ${BUILDDIR}/librccl-profiler.so

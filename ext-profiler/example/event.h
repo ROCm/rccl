@@ -184,6 +184,10 @@ struct context {
   int proxyCtrlPoolBase;
   int proxyCtrlPoolIndex;
   struct proxyCtrl* proxyCtrlPool;
+
+  /* Oneshot capture: completed collectives (for warmup) and dump quota */
+  uint64_t collCompletionSeq;
+  int oneshotDumpsDone;
 };
 
 int taskEventQueueEmpty(struct group* g);
