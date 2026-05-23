@@ -9,6 +9,10 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages by default. Fatal error messages can be suppressed by setting `NCCL_DEBUG=NONE`.
 * Disabled `reduceCopyPacks` pipelining for `gfx950`.
 
+### Resolved Issues
+
+* Fixed a cross-`genericOp` race in the kernel-side IB / socket net checksum producer (`ProtoSimple` `postPeer`) that intermittently published `csum=0` over real bytes for `Dst=0` ops followed by `Dst=1` ops (typically the inner `directRecvReduceDirectSend` → `directRecvReduceCopyDirectSend` transition of ring AllReduce). The `RolePostSend` lane was re-reading `ncclShmem.groups[group].dsts[Dst+index]` from shmem inside `postPeer`, after the trailing `barrier()` had already released `tid==0` of the next `genericOp` to overwrite the same slot. The `RolePostSend` lane now snapshots the pointer into a per-thread member (`csumPostSendPtrSnap`) before the barrier and `postPeer`'s warp XOR consumes that snapshot, eliminating the TOCTTOU and the resulting receiver `expected=0x0 got=non-zero` mismatches at large message sizes on multi-node IB ring AllReduce.
+
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
 ### Changed

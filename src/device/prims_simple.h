@@ -160,8 +160,9 @@ private:
     }
 
     if (flags & (Recv*RoleWaitRecv | Send*RoleWaitSend)) {
-      if ((flags & ConnFifoEnabled) && (flags & (Send * RoleWaitSend)))
+      if ((flags & ConnFifoEnabled) && (flags & (Send * RoleWaitSend))) {
         connFifo[step%NCCL_STEPS].size = nelts*sizeof(T);
+      }
 
       void **ptrs = isSendNotRecv ? (ncclShmem.groups[group].dsts + Dst)
                                   : (ncclShmem.groups[group].srcs + Src);
@@ -207,10 +208,101 @@ private:
       }
       step += StepPerSlice;
     }
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // Warp-cooperative recv-side XOR verify. The RoleWaitRecv lane just saw
+    // the proxy's tail advance and -- crucially -- the proxy already wrote
+    // recvMem->connFifo[slot].checksum before the tail bump (see
+    // progressRecv in net.cc, fenced by __sync_synchronize() before the
+    // *recvTail store). The wire value is encoded the same way ncclIbImmPack
+    // builds it: low NCCL_IB_IMM_SIZE_BITS hold the exact byte count the
+    // sender XORed over, upper NCCL_IB_IMM_CSUM_BITS hold the folded csum.
+    // NCCL_IB_CHECKSUM_NONE (== NCCL_NET_SOCKET_CHECKSUM_NONE, all-ones)
+    // means "no checksum delivered" (LL/LL128, oversized payload that did
+    // not fit the IMM, multi-recv tail subs, sender had checksums off, ...)
+    // and we skip silently. The verify is pulled out of the
+    // RoleWaitRecv-only gate so every warp lane reaches the __ballot/__shfl
+    // dance; lanes without a RoleWaitRecv neighbour short-circuit because
+    // mask becomes zero immediately.
+    if (Recv && ncclShmem.comm.netChecksumEnabled) {
+      bool myWait = (flags & (Recv*RoleWaitRecv)) && (flags & ConnFifoEnabled);
+      long long myRecvPtr = 0;
+      int mySize = 0, myDoCsum = 0;
+      uint32_t myExpected = NCCL_IB_CHECKSUM_NONE;
+      if (myWait) {
+        int slot = (step - StepPerSlice) % NCCL_STEPS;
+        uint32_t packed = connFifo[slot].checksum;
+        myExpected = packed;
+        if (packed != NCCL_IB_CHECKSUM_NONE) {
+          mySize = (int)(packed & NCCL_IB_IMM_SIZE_MAX);
+          myRecvPtr = (long long)(uintptr_t)ncclShmem.groups[group].srcs[Src + index];
+          myDoCsum = (mySize > 0 && myRecvPtr != 0) ? 1 : 0;
+        }
+      }
+      int lane = threadIdx.x % WARP_SIZE;
+      unsigned long long mask = __ballot(myWait ? 1 : 0);
+      while (mask) {
+        int srcLane = __ffsll((long long)mask) - 1;
+        long long ptrLL = __shfl(myRecvPtr, srcLane);
+        int       bytes = __shfl(mySize,    srcLane);
+        int       doCsum = __shfl(myDoCsum, srcLane);
+        uint32_t  expected = (uint32_t)__shfl((int)myExpected, srcLane);
+        uint32_t got = ncclQuickXorCsumWarp(
+            lane,
+            doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
+            doCsum ? (size_t)bytes : 0);
+        if (lane == srcLane && doCsum) {
+          uint32_t expectedCsum = (expected >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
+          uint32_t gotCsum = ncclQuickXorCsumFold12(got);
+          if (gotCsum != expectedCsum) {
+            printf("RCCL: net recv csum mismatch rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
+              ncclShmem.comm.rank, blockIdx.x,
+              (int)((step - StepPerSlice) % NCCL_STEPS),
+              bytes, expectedCsum, gotCsum, got);
+          }
+        }
+        mask &= ~(1ULL << srcLane);
+      }
+    }
+#endif
   }
 
-  template<int Recv, int Send>
+  template<int Recv, int Send, int Dst=0>
   inline __device__ void postPeer(bool dataStored) {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // TOCTTOU snapshot of the send-side staging pointer (and matching size)
+    // BEFORE the __threadfence_system() below. The barrier() preceding the
+    // postPeer call in genericOp guarantees that ncclShmem.groups[group].dsts
+    // currently holds this iteration's value (written by RoleWaitSend) and
+    // that connFifo[step%NCCL_STEPS].size has been published by waitPeer.
+    //
+    // Without this snapshot, on multi-node AllReduce (SlicePerChunk=2,
+    // StepPerSlice=2) the RolePostSend lane stalls inside
+    // __threadfence_system() for hundreds of cycles while every other warp
+    // (which skips the fence) races ahead into the next iteration's
+    // waitPeer and overwrites ncclShmem.groups[group].dsts[Dst+index] in
+    // shared memory. The original snapshot at the start of the XOR block
+    // would then read the *next* iteration's ptr, XOR the wrong buffer,
+    // and publish that csum into the *current* iteration's slot --
+    // producing the persistent "RCCL: net recv csum mismatch ... slot=2"
+    // warnings on the receiver (slot 2 = iter 1 of every chunk, whose race
+    // partner is the next chunk's iter 0 waitPeer write into dsts).
+    //
+    // We compute the slot from the pre-increment step (step % NCCL_STEPS),
+    // which equals (step+StepPerSlice-StepPerSlice) % NCCL_STEPS = the same
+    // slot the kernel will use after the step += StepPerSlice below.
+    bool postSnapPost = (flags & Send*RolePostSend) && (flags & ConnFifoEnabled)
+                        && ncclShmem.comm.netChecksumEnabled;
+    long long postSnapPtr = 0;
+    int postSnapSize = 0, postSnapSlot = 0;
+    if (postSnapPost) {
+      postSnapSlot = step % NCCL_STEPS;
+      postSnapSize = connFifo[postSnapSlot].size;
+      // Match waitPeer: ptrs = dsts + Dst, ptrs[index] is the reduceCopy destination.
+      postSnapPtr = (long long)(uintptr_t)ncclShmem.groups[group].dsts[Dst + index];
+    }
+#endif
+
     if (gfx9CheapFenceMode == ncclGfx9PostPeerFenceCheap) {
       __atomic_signal_fence(__ATOMIC_SEQ_CST);
       barrier_generic(asm volatile("s_waitcnt lgkmcnt(0) vmcnt(0)"), nworkers, barrier_next, barriers);
@@ -223,11 +315,74 @@ private:
       }
     }
 
+    // Advance step before computing the FIFO slot so that
+    // `(step - StepPerSlice) % NCCL_STEPS` matches the slot that waitPeer wrote
+    // in this iteration (waitPeer uses `step % NCCL_STEPS` pre-increment).
+    // This mirrors process()/patReduce()/patCopy(), where the step is bumped
+    // before the slot is derived. Computing the slot before the increment
+    // would point one step behind waitPeer (and underflow to a negative index
+    // on the first slice of a fresh connection, causing OOB read/write into
+    // memory preceding connFifo[]).
+    if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
+      step += StepPerSlice;
+    }
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // Warp-cooperative XOR checksum.
+    //
+    // The RolePostSend lane has the slot/size/ptr; we publish them via
+    // __shfl to the rest of its warp so all WARP_SIZE lanes can XOR the
+    // buffer in parallel and reduce via __shfl_xor. `__ballot` lets warps
+    // without any RolePostSend lane skip the work entirely, and the
+    // `while (mask)` loop iterates once per RolePostSend lane in the
+    // (rare) case multiple peers land in the same warp.
+    //
+    // Inputs come from the early (pre-fence) snapshot above so the next
+    // iteration's waitPeer cannot race-overwrite the shared-memory dsts
+    // we XOR over.
+    //
+    // Must run before the upcoming fence_acq_rel_sys() store and the
+    // STORE(connStepPtr, step) tail update so the proxy sees the new
+    // checksum together with the new tail. Skipped entirely when neither
+    // net transport will consume the checksum (RCCL_IB_RDMA_CHECKSUM=0
+    // and RCCL_SOCKET_CHECKSUM=0) -- the flag is uniform across all
+    // lanes so the guard does not introduce divergence.
+    if (ncclShmem.comm.netChecksumEnabled) {
+      int myDoCsum = (postSnapPost && dataStored && postSnapSize > 0 && postSnapPtr != 0) ? 1 : 0;
+      int lane = threadIdx.x % WARP_SIZE;
+      unsigned long long mask = __ballot(postSnapPost ? 1 : 0);
+      while (mask) {
+        int srcLane = __ffsll((long long)mask) - 1;
+        long long ptrLL  = __shfl(postSnapPtr,  srcLane);
+        int       bytes  = __shfl(postSnapSize, srcLane);
+        int       doCsum = __shfl(myDoCsum,     srcLane);
+        int       slot   = __shfl(postSnapSlot, srcLane);
+        uint32_t csum = ncclQuickXorCsumWarp(
+            lane,
+            doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
+            doCsum ? (size_t)bytes : 0);
+        if (lane == srcLane) {
+          connFifo[slot].checksum = doCsum ? csum : 0;
+        }
+        mask &= ~(1ULL << srcLane);
+      }
+    }
+#endif
+
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
 
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // Ensure the checksum store is visible before the proxy observes the
+    // advanced step via STORE(connStepPtr, step). On GFX9 STORE is
+    // __ATOMIC_RELAXED, so without this fence the proxy could read the new
+    // tail with a stale checksum.
+    if ((flags & Send*RolePostSend) && (flags & ConnFifoEnabled)) {
+      fence_acq_rel_sys();
+    }
+#endif
+
     if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
-      step += StepPerSlice;
       STORE(connStepPtr, step);
     }
   }
@@ -425,7 +580,7 @@ private:
           workSize = 0;
         }
         barrier(); // This barrier has a counterpart in following loop
-        postPeer<Recv, Send>(0 < workSize);
+        postPeer<Recv, Send, Dst>(0 < workSize);
         offset += sliceSize;
         slice += 1;
         // Yes, for some template arguments this code will be unreachable.  That's fine.
@@ -446,7 +601,7 @@ private:
       }
       barrier(); // Has couterpart in preceding worker-only loop.
       int workSize = ncclShmem.aborted ? 0 : sliceSize;
-      postPeer<Recv, Send>(0 < workSize);
+      postPeer<Recv, Send, Dst>(0 < workSize);
       offset += sliceSize;
       slice += 1;
     }
@@ -581,12 +736,97 @@ public:
         // coverity[dead_error_begin]
         dstSize = ncclShmem.groups[group].dstSizes[index];
         ncclShmem.groups[group].dstSizes[index] = 0;
-        if (flags & ConnFifoEnabled) connFifo[step%NCCL_STEPS].size = dstSize*sizeof(T);
+        if (flags & ConnFifoEnabled) {
+          connFifo[step%NCCL_STEPS].size = dstSize*sizeof(T);
+        }
       }
       barrier();
       if (flags & (Recv*(RoleWaitRecv|RolePostRecv) | Send*(RoleWaitSend|RolePostSend))) {
         step += StepPerSlice;
       }
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      // Warp-cooperative XOR checksum. Pulled out of the RolePostSend role
+      // gate so every warp lane reaches it; lanes with no Send*RolePostSend
+      // bit short-circuit via __ballot, but lanes that share a warp with a
+      // RolePostSend lane fold in WARP_SIZE-way parallelism over the buffer.
+      // Runs before fence_acq_rel_sys() / STORE(connStepPtr) below so the
+      // proxy sees the checksum together with the new tail. Skipped when
+      // neither net transport will consume the checksum.
+      if (ncclShmem.comm.netChecksumEnabled) {
+        bool myPost = (flags & Send*RolePostSend) && (flags & ConnFifoEnabled);
+        long long mySendPtr = 0;
+        int mySize = 0, mySlot = 0, myDoCsum = 0;
+        if (myPost) {
+          mySlot = (step - StepPerSlice) % NCCL_STEPS;
+          mySize = connFifo[mySlot].size;
+          mySendPtr = (long long)(uintptr_t)ncclShmem.groups[group].dsts[index];
+          myDoCsum = (dstSize > 0 && mySize > 0 && mySendPtr != 0) ? 1 : 0;
+        }
+        int lane = threadIdx.x % WARP_SIZE;
+        unsigned long long mask = __ballot(myPost ? 1 : 0);
+        while (mask) {
+          int srcLane = __ffsll((long long)mask) - 1;
+          long long ptrLL  = __shfl(mySendPtr, srcLane);
+          int       bytes  = __shfl(mySize,    srcLane);
+          int       doCsum = __shfl(myDoCsum,  srcLane);
+          int       slot   = __shfl(mySlot,    srcLane);
+          uint32_t csum = ncclQuickXorCsumWarp(
+              lane,
+              doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
+              doCsum ? (size_t)bytes : 0);
+          if (lane == srcLane) {
+            connFifo[slot].checksum = doCsum ? csum : 0;
+          }
+          mask &= ~(1ULL << srcLane);
+        }
+        // Mirror of the send block above for the recv side. RoleWaitRecv
+        // lanes pick up the IMM-packed (size, folded csum) the proxy wrote
+        // into connFifo[slot].checksum just before bumping the tail (see
+        // progressRecv in net.cc, fenced by __sync_synchronize()). Sharing
+        // a warp with the send XOR is fine because the two blocks use
+        // independent __ballot masks and srcLane sequences.
+        if (Recv) {
+          bool myWait = (flags & Recv*RoleWaitRecv) && (flags & ConnFifoEnabled);
+          long long myRecvPtr = 0;
+          int rSize = 0, rDoCsum = 0;
+          uint32_t myExpected = NCCL_IB_CHECKSUM_NONE;
+          if (myWait) {
+            int rSlot = (step - StepPerSlice) % NCCL_STEPS;
+            uint32_t packed = connFifo[rSlot].checksum;
+            myExpected = packed;
+            if (packed != NCCL_IB_CHECKSUM_NONE) {
+              rSize = (int)(packed & NCCL_IB_IMM_SIZE_MAX);
+              myRecvPtr = (long long)(uintptr_t)ncclShmem.groups[group].srcs[index];
+              rDoCsum = (rSize > 0 && myRecvPtr != 0) ? 1 : 0;
+            }
+          }
+          int rlane = threadIdx.x % WARP_SIZE;
+          unsigned long long rmask = __ballot(myWait ? 1 : 0);
+          while (rmask) {
+            int rsrcLane = __ffsll((long long)rmask) - 1;
+            long long rptrLL = __shfl(myRecvPtr, rsrcLane);
+            int       rbytes = __shfl(rSize,    rsrcLane);
+            int       rdo    = __shfl(rDoCsum,  rsrcLane);
+            uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+            uint32_t rgot = ncclQuickXorCsumWarp(
+                rlane,
+                rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
+                rdo ? (size_t)rbytes : 0);
+            if (rlane == rsrcLane && rdo) {
+              uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
+              uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
+              if (gotCsum != expCsum) {
+                printf("RCCL: net recv csum mismatch rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
+                  ncclShmem.comm.rank, blockIdx.x,
+                  (int)((step - StepPerSlice) % NCCL_STEPS),
+                  rbytes, expCsum, gotCsum, rgot);
+              }
+            }
+            rmask &= ~(1ULL << rsrcLane);
+          }
+        }
+      }
+#endif
       if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
         if (Send && (!Recv || (flags & RolePostSend)) && (dstSize!=0 || (flags&ConnFifoEnabled))) {
           fence_acq_rel_sys();
@@ -656,7 +896,7 @@ private:
         }
       }
       fenceNeeded = __any(fenceNeeded);
-      postPeer<Recv, Send>(fenceNeeded);
+      postPeer<Recv, Send, 0>(fenceNeeded);
       offset += realSize;
     }
   }
@@ -1238,6 +1478,91 @@ public:
 
     patBarrier();
 
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // Warp-cooperative XOR checksum. See postPeer for the pattern.
+    // Pulled in front of the RolePostSend role gate (and its
+    // fence_acq_rel_sys + tail store) so every warp lane participates and
+    // the checksum write is sequenced before the release fence below.
+    // Skipped when neither net transport will consume the checksum.
+    if (ncclShmem.comm.netChecksumEnabled) {
+      bool myPost = postSend && (flags & RolePostSend) && (peer != nullptr) && (peer->connFifo != nullptr);
+      long long mySendPtr = 0;
+      int mySize = 0, mySlot = 0, myDoCsum = 0;
+      if (myPost) {
+        mySlot = (step - StepPerSlice) % NCCL_STEPS;
+        mySize = peer->connFifo[mySlot].size;
+        mySendPtr = (long long)(uintptr_t)ncclShmem.groups[group].dsts[0];
+        myDoCsum = (nelem > 0 && mySize > 0 && mySendPtr != 0) ? 1 : 0;
+      }
+      int lane = threadIdx.x % WARP_SIZE;
+      unsigned long long mask = __ballot(myPost ? 1 : 0);
+      while (mask) {
+        int srcLane = __ffsll((long long)mask) - 1;
+        long long ptrLL  = __shfl(mySendPtr, srcLane);
+        int       bytes  = __shfl(mySize,    srcLane);
+        int       doCsum = __shfl(myDoCsum,  srcLane);
+        int       slot   = __shfl(mySlot,    srcLane);
+        uint32_t csum = ncclQuickXorCsumWarp(
+            lane,
+            doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
+            doCsum ? (size_t)bytes : 0);
+        if (lane == srcLane) {
+          // srcLane uses its own `peer` (sendDims peer) to address the FIFO.
+          peer->connFifo[slot].checksum = doCsum ? csum : 0;
+        }
+        mask &= ~(1ULL << srcLane);
+      }
+      // Recv-side mirror. RoleWaitRecv lanes still hold the un-bumped peer
+      // step (postRecv only fires on RolePostRecv), so the just-completed
+      // slice lives at `step % NCCL_STEPS` here. We use the recv peer's
+      // connFifo (NOT the send peer used above): in patReduce each lane's
+      // `peer` was set per role above, so RoleWaitRecv lanes already point
+      // at shmem->recvDims+ps->recvDim and their peer->connFifo is the
+      // recv-side fifo the proxy populates. Skipped when the slot's csum
+      // is the all-ones sentinel (no checksum delivered).
+      if (recv) {
+        bool myWait = (flags & RoleWaitRecv) && (peer != nullptr) && (peer->connFifo != nullptr);
+        long long myRecvPtr = 0;
+        int rSize = 0, rDoCsum = 0;
+        uint32_t myExpected = NCCL_IB_CHECKSUM_NONE;
+        if (myWait) {
+          int rSlot = step % NCCL_STEPS;
+          uint32_t packed = peer->connFifo[rSlot].checksum;
+          myExpected = packed;
+          if (packed != NCCL_IB_CHECKSUM_NONE) {
+            rSize = (int)(packed & NCCL_IB_IMM_SIZE_MAX);
+            myRecvPtr = (long long)(uintptr_t)ncclShmem.groups[group].srcs[0];
+            rDoCsum = (rSize > 0 && myRecvPtr != 0) ? 1 : 0;
+          }
+        }
+        int rlane = threadIdx.x % WARP_SIZE;
+        unsigned long long rmask = __ballot(myWait ? 1 : 0);
+        while (rmask) {
+          int rsrcLane = __ffsll((long long)rmask) - 1;
+          long long rptrLL = __shfl(myRecvPtr, rsrcLane);
+          int       rbytes = __shfl(rSize,    rsrcLane);
+          int       rdo    = __shfl(rDoCsum,  rsrcLane);
+          uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+          uint32_t rgot = ncclQuickXorCsumWarp(
+              rlane,
+              rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
+              rdo ? (size_t)rbytes : 0);
+          if (rlane == rsrcLane && rdo) {
+            uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
+            uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
+            if (gotCsum != expCsum) {
+              printf("RCCL: net recv csum mismatch (patReduce) rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
+                ncclShmem.comm.rank, blockIdx.x,
+                (int)(step % NCCL_STEPS),
+                rbytes, expCsum, gotCsum, rgot);
+            }
+          }
+          rmask &= ~(1ULL << rsrcLane);
+        }
+      }
+    }
+#endif
+
     if (postSend && (flags & RolePostSend)) {
       if (nelem > 0 || peer->connFifo) fence_acq_rel_sys();
       st_relaxed_sys_global(peer->tailPtr, step);
@@ -1331,6 +1656,86 @@ public:
     if (ps->recvDim >= 0 && (flags & RoleWaitRecv)) atomicMax(&peer->accSize, ps->recvOffset + nelem + (step+ps->stepOffset)*peer->connStepSize);
 
     patBarrier();
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // Warp-cooperative XOR checksum. See postPeer/patReduce for the pattern.
+    // Skipped when neither net transport will consume the checksum.
+    if (ncclShmem.comm.netChecksumEnabled) {
+      bool myPost = postSend && (flags & RolePostSend) && (peer != nullptr) && (peer->connFifo != nullptr);
+      long long mySendPtr = 0;
+      int mySize = 0, mySlot = 0, myDoCsum = 0;
+      if (myPost) {
+        mySlot = (step - StepPerSlice) % NCCL_STEPS;
+        mySize = peer->connFifo[mySlot].size;
+        mySendPtr = (long long)(uintptr_t)ncclShmem.groups[group].dsts[0];
+        myDoCsum = (nelem > 0 && mySize > 0 && mySendPtr != 0) ? 1 : 0;
+      }
+      int lane = threadIdx.x % WARP_SIZE;
+      unsigned long long mask = __ballot(myPost ? 1 : 0);
+      while (mask) {
+        int srcLane = __ffsll((long long)mask) - 1;
+        long long ptrLL  = __shfl(mySendPtr, srcLane);
+        int       bytes  = __shfl(mySize,    srcLane);
+        int       doCsum = __shfl(myDoCsum,  srcLane);
+        int       slot   = __shfl(mySlot,    srcLane);
+        uint32_t csum = ncclQuickXorCsumWarp(
+            lane,
+            doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
+            doCsum ? (size_t)bytes : 0);
+        if (lane == srcLane) {
+          peer->connFifo[slot].checksum = doCsum ? csum : 0;
+        }
+        mask &= ~(1ULL << srcLane);
+      }
+      // Recv-side mirror for patCopy. Note the slot expression differs from
+      // patReduce: patCopy's RoleWaitRecv spin waits on
+      // `peer->stepCache < step + ps->stepOffset + StepPerSlice`, so the
+      // just-completed slice lives at `(step + ps->stepOffset) % NCCL_STEPS`
+      // (RoleWaitRecv has not bumped step; only RolePostRecv did, two
+      // statements above). Reads use the recv peer's connFifo, which is
+      // what `peer` already points at for RoleWaitRecv lanes here.
+      if (recv) {
+        bool myWait = (flags & RoleWaitRecv) && (peer != nullptr) && (peer->connFifo != nullptr);
+        long long myRecvPtr = 0;
+        int rSize = 0, rDoCsum = 0;
+        uint32_t myExpected = NCCL_IB_CHECKSUM_NONE;
+        if (myWait) {
+          int rSlot = (step + ps->stepOffset) % NCCL_STEPS;
+          uint32_t packed = peer->connFifo[rSlot].checksum;
+          myExpected = packed;
+          if (packed != NCCL_IB_CHECKSUM_NONE) {
+            rSize = (int)(packed & NCCL_IB_IMM_SIZE_MAX);
+            myRecvPtr = (long long)(uintptr_t)ncclShmem.groups[group].srcs[0];
+            rDoCsum = (rSize > 0 && myRecvPtr != 0) ? 1 : 0;
+          }
+        }
+        int rlane = threadIdx.x % WARP_SIZE;
+        unsigned long long rmask = __ballot(myWait ? 1 : 0);
+        while (rmask) {
+          int rsrcLane = __ffsll((long long)rmask) - 1;
+          long long rptrLL = __shfl(myRecvPtr, rsrcLane);
+          int       rbytes = __shfl(rSize,    rsrcLane);
+          int       rdo    = __shfl(rDoCsum,  rsrcLane);
+          uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+          uint32_t rgot = ncclQuickXorCsumWarp(
+              rlane,
+              rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
+              rdo ? (size_t)rbytes : 0);
+          if (rlane == rsrcLane && rdo) {
+            uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
+            uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
+            if (gotCsum != expCsum) {
+              printf("RCCL: net recv csum mismatch (patCopy) rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
+                ncclShmem.comm.rank, blockIdx.x,
+                (int)((step + ps->stepOffset) % NCCL_STEPS),
+                rbytes, expCsum, gotCsum, rgot);
+            }
+          }
+          rmask &= ~(1ULL << rsrcLane);
+        }
+      }
+    }
+#endif
 
     if (postSend && (flags & RolePostSend)) {
       if (nelem > 0 || peer->connFifo) fence_acq_rel_sys();

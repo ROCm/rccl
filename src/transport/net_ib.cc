@@ -29,6 +29,7 @@
 #include "ibvwrap.h"
 #include "mlx5/mlx5dvwrap.h"
 #include "graph/xml.h"
+#include "net_ib_checksum.h"
 
 #define MAXSUFFIXSIZE 16
 #define MAXNAMESIZE (64 + MAXSUFFIXSIZE)
@@ -131,6 +132,10 @@ NCCL_PARAM(IbEceEnable,"IB_ECE_ENABLE",1);
 NCCL_PARAM(IbDataDirect,"IB_DATA_DIRECT",1);
 NCCL_PARAM(IbQpsPerConn, "IB_QPS_PER_CONNECTION", 1);
 RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 0);
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+RCCL_PARAM(IbRdmaChecksum, "IB_RDMA_CHECKSUM", 1);
+RCCL_PARAM(IbRdmaChecksumTrace, "IB_RDMA_CHECKSUM_TRACE", 0);
+#endif
 
 static ncclResult_t ncclIbStatsInit(struct ncclIbStats* stat) {
   __atomic_store_n(&stat->fatalErrorCount, 0, __ATOMIC_RELAXED);
@@ -1091,9 +1096,16 @@ struct ncclIbRequest {
       void* data;
       uint32_t lkeys[NCCL_IB_MAX_DEVS_PER_NIC];
       int offset;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      uint32_t checksum;
+#endif
     } send;
     struct {
       int* sizes;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      void* data[NCCL_NET_IB_MAX_RECVS];
+      uint32_t checksum[NCCL_NET_IB_MAX_RECVS];
+#endif
     } recv;
   };
 };
@@ -1178,6 +1190,9 @@ struct ncclIbSendComm {
   struct ncclIbSendCommDev devs[NCCL_IB_MAX_DEVS_PER_NIC];
   struct ncclIbRequest* fifoReqs[MAX_REQUESTS][NCCL_NET_IB_MAX_RECVS];
   struct ncclIbRemSizesFifo remSizesFifo;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  uint32_t proxyChecksum[MAX_REQUESTS];
+#endif
   uint64_t fifoHead;
   int ar; // Use adaptive routing when all merged devices have it enabled
 };
@@ -1221,6 +1236,16 @@ struct ncclIbRecvComm {
   int sizesFifo[MAX_REQUESTS][NCCL_NET_IB_MAX_RECVS];
   int gpuFlushHostMem;
   int flushEnabled;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // Wire-received 12-bit folded checksums from the most recently completed
+  // recv test() call. Populated by ncclIbTest before freeing the request,
+  // read by net.cc via ncclIbGetRecvChecksums and forwarded to the receive
+  // kernel through connFifo[slot].checksum. Slot is the sub index within
+  // the multi-recv (0 for the common single-recv case). NCCL_IB_CHECKSUM_NONE
+  // means no checksum was available (LL/LL128, oversized IMM, multi-recv
+  // tail subs, or RCCL_IB_RDMA_CHECKSUM=0 on the sender).
+  uint32_t lastRecvChecksums[NCCL_NET_IB_MAX_RECVS];
+#endif
 };
 static_assert((offsetof(struct ncclIbRecvComm, remFifo) % 32) == 0, "ncclIbRecvComm fifo must be 32-byte aligned");
 
@@ -2115,6 +2140,42 @@ ncclResult_t ncclIbDeregMr(void* comm, void* mhandle) {
 
 NCCL_PARAM(IbSplitDataOnQps, "IB_SPLIT_DATA_ON_QPS", 0);
 
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+void ncclIbSetProxyChecksum(void* sendComm, int /*buffSlot*/, uint32_t checksum) {
+  // The `slot` net.cc passes here is the proxy buffSlot ((sub->base + sub->transmitted)
+  // % NCCL_STEPS, range 0..7), but ncclIbIsend below reads from
+  // proxyChecksum[fifoHead % MAX_REQUESTS] (range 0..255). The two indices only
+  // coincide for the first NCCL_STEPS sends on a send-comm; after that fifoHead
+  // outgrows buffSlot and the IB plugin would consume uninitialised entries
+  // (always 0), shipping size+csum=0 IMMs and producing deterministic
+  // "expected 0x0 got 0xNN" mismatches on the receive-side kernel verify.
+  // Since net.cc calls this exactly once immediately before each ncclIbIsend on
+  // the same send-comm/thread, we can safely key the slot off of the IB plugin's
+  // own fifoHead, which is the slot the next ncclIbIsend will consume.
+  struct ncclIbSendComm* comm = (struct ncclIbSendComm*)sendComm;
+  if (comm) comm->proxyChecksum[comm->fifoHead % MAX_REQUESTS] = checksum;
+}
+
+// Hand the wire checksums stashed by the last completed recv test() back to
+// net.cc. n is the multi-recv subcount as seen by net.cc; we clamp it to
+// NCCL_NET_IB_MAX_RECVS defensively and pad any tail with NONE so callers do
+// not consume uninitialized values when subCount exceeds the IB max recvs
+// (should never happen because NCCL_PROXY_MAX_SUBS <= NCCL_NET_IB_MAX_RECVS,
+// but we'd rather degrade to "skip kernel verify" than crash).
+ncclResult_t ncclIbGetRecvChecksums(void* recvComm, int n, uint32_t* checksums) {
+  if (checksums == NULL) return ncclSuccess;
+  struct ncclIbRecvComm* comm = (struct ncclIbRecvComm*)recvComm;
+  int copy = n < NCCL_NET_IB_MAX_RECVS ? n : NCCL_NET_IB_MAX_RECVS;
+  if (comm) {
+    for (int i=0; i<copy; i++) checksums[i] = comm->lastRecvChecksums[i];
+  } else {
+    for (int i=0; i<copy; i++) checksums[i] = NCCL_IB_CHECKSUM_NONE;
+  }
+  for (int i=copy; i<n; i++) checksums[i] = NCCL_IB_CHECKSUM_NONE;
+  return ncclSuccess;
+}
+#endif // RCCL_IB_CHECKSUM_DEVICE_ENABLED
+
 ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
   struct ncclIbRequest** reqs = comm->fifoReqs[slot];
   volatile struct ncclIbSendFifo* slots = comm->fifo[slot];
@@ -2138,11 +2199,24 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot) {
 #endif
   }
 
-  // Write size as immediate data. In the case of multi-send, only write
-  // 0 or 1 as size to indicate whether there was data sent or received.
+  // Write size (and optional checksum) as immediate data. In the case of multi-send,
+  // only write 0 or 1 as size to indicate whether there was data sent or received.
   uint32_t immData = 0;
   if (nreqs == 1) {
-    immData = reqs[0]->send.size;
+    int size = reqs[0]->send.size;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    if (rcclParamIbRdmaChecksum() && ncclIbImmCanPack(size)) {
+      uint32_t csum = reqs[0]->send.checksum;
+      if (csum == NCCL_IB_CHECKSUM_NONE) csum = NCCL_IB_IMM_CSUM_DISABLED;
+      immData = ncclIbImmPack(size, csum);
+      if (rcclParamIbRdmaChecksumTrace() && csum != NCCL_IB_IMM_CSUM_DISABLED)
+        TRACE(NCCL_NET, "NET/IB: csum send imm=0x%x size=%d csum=0x%x", immData, size, reqs[0]->send.checksum);
+    } else {
+      immData = size;
+    }
+#else
+    immData = size;
+#endif
   } else {
     int* sizes = comm->remSizesFifo.elems[slot];
     for (int r=0; r<nreqs; r++) sizes[r] = reqs[r]->send.size;
@@ -2293,6 +2367,9 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, size_t size, int tag, void*
     req->send.size = size;
     req->send.data = data;
     req->send.offset = 0;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    req->send.checksum = comm->proxyChecksum[slot];
+#endif
 #ifdef NCCL_ENABLE_NET_PROFILING
     req->pInfo[0].pHandle = phandle;
 #endif
@@ -2436,6 +2513,16 @@ ncclResult_t ncclIbIrecv(void* recvComm, int n, void** data, size_t* sizes, int*
   req->type = NCCL_NET_IB_REQ_RECV;
   req->sock = &comm->base.sock;
   req->nreqs = n;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  for (int i = 0; i < n; i++) {
+    req->recv.data[i] = data[i];
+    // Default to "no wire checksum" so multi-recv tail subs (where the IMM
+    // only carries the first sub's csum) and other cases that skip the
+    // ncclIbImmUnpack path below propagate NONE through to the kernel
+    // instead of a stale 0 that could collide with a real folded value.
+    req->recv.checksum[i] = NCCL_IB_CHECKSUM_NONE;
+  }
+#endif
 #ifdef NCCL_ENABLE_NET_PROFILING
   for (int r = 0; r < n && phandles; r++) req->pInfo[r].nEventHandles = 0;
 #endif
@@ -2565,8 +2652,21 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
       TRACE(NCCL_NET, "r=%p done", r);
       *done = 1;
       if (sizes && r->type == NCCL_NET_IB_REQ_RECV) {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+        // Stash the wire-received checksums into the RecvComm before
+        // ncclIbFreeRequest below recycles this request. net.cc reads them
+        // via ncclIbGetRecvChecksums and publishes them into
+        // recvMem->connFifo[slot].checksum so the receiving kernel can do
+        // the cooperative XOR verify after waitPeer (see prims_simple.h).
+        // Host-side verification used to live here; moving the XOR onto the
+        // GPU avoids serializing the proxy thread on a per-step CPU XOR.
+        struct ncclIbRecvComm* recvComm = (struct ncclIbRecvComm*)r->base;
+#endif
         for (int i=0; i<r->nreqs; i++) {
           sizes[i] = r->recv.sizes[i];
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+          recvComm->lastRecvChecksums[i] = r->recv.checksum[i];
+#endif
 #ifdef NCCL_ENABLE_NET_PROFILING
           for (int j = 0; j < r->pInfo[i].nEventHandles; j++) {
             NCCLCHECK(ncclProfilerFunction(&r->pInfo[i].qpEventHandles[j], ncclProfilerNetEventStop, NULL, 0, NULL));
@@ -2650,7 +2750,26 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
                 return ncclInternalError;
               }
               if (req->nreqs == 1) {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+                if (rcclParamIbRdmaChecksum() && ncclIbImmCanPack(ncclIbImmUnpackSize(wc->imm_data))) {
+                  req->recv.sizes[0] = ncclIbImmUnpackSize(wc->imm_data);
+                  uint32_t immCsum = ncclIbImmUnpackCsum(wc->imm_data);
+                  // Stash the full IMM (size in low NCCL_IB_IMM_SIZE_BITS,
+                  // folded csum in the upper NCCL_IB_IMM_CSUM_BITS) so the
+                  // device-side verify in prims_simple.h can pull both the
+                  // exact byte count and the folded checksum out of a
+                  // single connFifo[slot].checksum read. Picking up the
+                  // packed value also keeps the wire format and the
+                  // proxy->kernel format identical for the IB transport.
+                  req->recv.checksum[0] = (immCsum == NCCL_IB_IMM_CSUM_DISABLED)
+                    ? NCCL_IB_CHECKSUM_NONE : wc->imm_data;
+                } else {
+                  req->recv.sizes[0] = wc->imm_data;
+                  req->recv.checksum[0] = NCCL_IB_CHECKSUM_NONE;
+                }
+#else
                 req->recv.sizes[0] = wc->imm_data;
+#endif
               }
             }
             req->events[i]--;

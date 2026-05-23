@@ -155,6 +155,120 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 8
 #define NCCL_LL128_SHMEM_SIZE (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS)
 
+// Compile-time switch for the entire RCCL net-transport (IB + socket)
+// checksum feature: the kernel-side warp-cooperative XOR producer and
+// verifier (postPeer / process / patReduce / patCopy), the host-side
+// proxy dispatch, the IB IMM packing / socket header bytes, and the
+// per-comm checksum bookkeeping. Default ON.
+//
+// Set to 0 (e.g. -DRCCL_IB_CHECKSUM_DEVICE_ENABLED=0, or
+// -DENABLE_IB_NET_CHECKSUM=OFF at cmake-configure time) to compile the
+// feature out entirely: kernel CSUM sites are not emitted, the IB IMM
+// reverts to size-only, the socket per-step header reverts to the
+// 4-byte size, and the dispatch code in net.cc / net_ib.cc /
+// net_socket.cc is dead-stripped. Useful for binary-size-sensitive
+// builds and for A/B testing whether the checksum code is implicated
+// in a regression without reverting the feature.
+//
+// Both peers in a connection MUST be built with the same value -- the
+// wire format is gated, not negotiated.
+#ifndef RCCL_IB_CHECKSUM_DEVICE_ENABLED
+#define RCCL_IB_CHECKSUM_DEVICE_ENABLED 1
+#endif
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+// Scalar (single-thread) variant. Kept for reference and for any callsite
+// that cannot guarantee warp-collective execution. Matches the host-side
+// `ncclNetSocketQuickXorCsumHost` / IB proxy verifier byte-for-byte.
+__device__ inline uint32_t ncclQuickXorCsum(const void* ptr, size_t bytes) {
+  const uint8_t* b = (const uint8_t*)ptr;
+  uint32_t csum = 0;
+  size_t i = 0;
+  for (; i + 4 <= bytes; i += 4) {
+    uint32_t w = *(const uint32_t*)(b + i);
+    csum ^= w;
+  }
+  if (i < bytes) {
+    uint32_t tail = 0;
+    for (size_t j = 0; j < bytes - i; j++) tail |= ((uint32_t)b[i + j]) << (8 * j);
+    csum ^= tail;
+  }
+  return csum;
+}
+
+// Warp-cooperative XOR checksum.
+//
+// MUST be called by ALL active lanes of the same warp with identical `ptr`
+// and `bytes` arguments (broadcast them via __shfl from the producing lane
+// when only one lane has the data — see `prims_simple.h` callsites). Each
+// lane XORs every WARP_SIZE-th 4-byte word; the trailing <4 bytes are
+// folded by lane 0; finally a butterfly __shfl_xor reduces across the warp
+// so every lane returns the same full checksum.
+//
+// Byte-order and tail handling intentionally mirror `ncclQuickXorCsum` so
+// the kernel-side, IB-proxy-side, and socket-recv-side computations all
+// agree on the wire value.
+__device__ inline uint32_t ncclQuickXorCsumWarp(int lane, const void* ptr, size_t bytes) {
+  uint32_t csum = 0;
+  if (ptr != nullptr && bytes > 0) {
+    const uint32_t* w = (const uint32_t*)ptr;
+    size_t nwords = bytes >> 2;
+    for (size_t i = (size_t)lane; i < nwords; i += WARP_SIZE) {
+      csum ^= w[i];
+    }
+    // Lane 0 folds the 0..3 trailing bytes (if any) with the same
+    // little-endian packing the scalar version uses.
+    if (lane == 0) {
+      size_t aligned = nwords << 2;
+      if (aligned < bytes) {
+        const uint8_t* b = (const uint8_t*)ptr;
+        uint32_t tail = 0;
+        for (size_t j = 0; j < bytes - aligned; j++) tail |= ((uint32_t)b[aligned + j]) << (8 * j);
+        csum ^= tail;
+      }
+    }
+  }
+  // Butterfly XOR reduce across the warp. All lanes must reach this point.
+  #pragma unroll
+  for (int offset = WARP_SIZE/2; offset > 0; offset >>= 1) {
+    csum ^= __shfl_xor(csum, offset);
+  }
+  return csum;
+}
+
+// Device-side mirror of constants and helpers from net_ib_checksum.h. We
+// duplicate them here (instead of including the host header from device
+// code) because the host file also defines `ncclIbQuickXorCsumHost`, an
+// inline meant for the CPU XOR pre-kernel-move that we do not want
+// accidentally instantiated as a device function. The format on the wire
+// and on the proxy->kernel path is identical:
+//   - low NCCL_IB_IMM_SIZE_BITS bits: byte count the sender XORed over
+//   - upper NCCL_IB_IMM_CSUM_BITS bits: folded checksum
+// NCCL_IB_CHECKSUM_NONE (all ones) is the "no checksum delivered" sentinel
+// (also numerically equal to NCCL_NET_SOCKET_CHECKSUM_NONE; see static
+// assert in src/transport/net.cc).
+#ifndef NCCL_IB_IMM_SIZE_BITS
+#define NCCL_IB_IMM_SIZE_BITS 20
+#define NCCL_IB_IMM_CSUM_BITS 12
+#define NCCL_IB_IMM_SIZE_MAX ((1u << NCCL_IB_IMM_SIZE_BITS) - 1)
+#define NCCL_IB_IMM_CSUM_MASK ((1u << NCCL_IB_IMM_CSUM_BITS) - 1)
+#define NCCL_IB_CHECKSUM_NONE 0xffffffffu
+#endif
+
+// Device-side mirror of ncclIbImmFoldCsum. Folds a full 32-bit XOR into the
+// 12-bit value the IB IMM carries on the wire so the kernel can compare
+// its locally computed checksum against the wire checksum the proxy stored
+// in connFifo[slot].checksum on the recv side. Socket recvs also store the
+// same packed (size, folded csum) form (see ncclNetSocketStashRecvChecksum),
+// so prims_simple.h has a single compare path regardless of which transport
+// delivered the data.
+__device__ inline uint32_t ncclQuickXorCsumFold12(uint32_t csum) {
+  csum ^= csum >> 16;
+  csum ^= csum >> NCCL_IB_IMM_CSUM_BITS;
+  return csum & NCCL_IB_IMM_CSUM_MASK;
+}
+#endif // RCCL_IB_CHECKSUM_DEVICE_ENABLED
+
 #define NCCL_P2P_WRITE 0x01
 #define NCCL_P2P_READ  0x02
 #define NCCL_DIRECT_NIC   0x04
@@ -589,6 +703,17 @@ struct ncclDevComm {
   int isAllNvlink;
   int p2pnChannelsPerPeer;
   int gfx9BarrierMode; // ncclGfx9BarrierFenceMode
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // Combined gate for the kernel-side XOR checksum producer in
+  // postPeer/process/patReduce/patCopy. 1 iff at least one net transport
+  // (IB via RCCL_IB_RDMA_CHECKSUM, sockets via RCCL_SOCKET_CHECKSUM) will
+  // consume the checksum; 0 lets the kernel skip the cooperative XOR
+  // entirely so the per-step latency is zero when neither transport
+  // checks it. Set once on the host at comm init from the two
+  // RCCL_PARAM env vars.
+  int netChecksumEnabled;
+#endif
 
   int* collNetDenseToUserRank;
 

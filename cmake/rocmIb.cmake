@@ -48,12 +48,51 @@ set(ROCM_NETIB_FILE "${CMAKE_SOURCE_DIR}/src/transport/net_ib_rocm.cc" CACHE FIL
 # -------------------------
 find_program(PATCH_EXECUTABLE patch)
 find_program(SED_EXECUTABLE sed)
+if(NOT PATCH_EXECUTABLE)
+  message(FATAL_ERROR "NET/IB ROCm: 'patch' not found in PATH (required to apply ${ROCM_NETIB_PATCH_FILE})")
+endif()
+if(NOT SED_EXECUTABLE)
+  message(FATAL_ERROR "NET/IB ROCm: 'sed' not found in PATH (required to generate ${ROCM_NETIB_FILE})")
+endif()
+
+set(ROCM_NETIB_SOURCE "${RCCL_SRC_DIR}/src/transport/net_ib.cc")
+
+if(NOT EXISTS "${ROCM_NETIB_PATCH_FILE}")
+  message(FATAL_ERROR "NET/IB ROCm: patch file not found: ${ROCM_NETIB_PATCH_FILE}")
+endif()
+if(NOT EXISTS "${ROCM_NETIB_SOURCE}")
+  message(FATAL_ERROR "NET/IB ROCm: source file not found: ${ROCM_NETIB_SOURCE}")
+endif()
+
+message(STATUS "Applying RCCL ROCM NetIB patch: ${ROCM_NETIB_PATCH_FILE}")
 
 execute_process(
-  COMMAND ${CMAKE_COMMAND} -E echo "Applying RCCL ROCM NetIB patch... to ${CMAKE_SOURCE_DIR}"
-  COMMAND bash -c "patch -p1 -i ${ROCM_NETIB_PATCH_FILE} -o ${ROCM_NETIB_FILE}"
-  WORKING_DIRECTORY ${RCCL_SRC_DIR}
+  COMMAND ${CMAKE_COMMAND} -E copy "${ROCM_NETIB_SOURCE}" "${ROCM_NETIB_FILE}"
+  RESULT_VARIABLE ROCM_NETIB_COPY_RESULT
 )
+
+if(ROCM_NETIB_COPY_RESULT)
+  message(FATAL_ERROR
+    "NET/IB ROCm: failed to copy ${ROCM_NETIB_SOURCE} to ${ROCM_NETIB_FILE} "
+    "(exit code ${ROCM_NETIB_COPY_RESULT})")
+endif()
+
+execute_process(
+  COMMAND ${PATCH_EXECUTABLE} -p1 -i "${ROCM_NETIB_PATCH_FILE}" "${ROCM_NETIB_FILE}"
+  WORKING_DIRECTORY "${RCCL_SRC_DIR}"
+  RESULT_VARIABLE ROCM_NETIB_PATCH_RESULT
+  ERROR_VARIABLE ROCM_NETIB_PATCH_ERROR
+  OUTPUT_VARIABLE ROCM_NETIB_PATCH_OUTPUT
+)
+
+if(ROCM_NETIB_PATCH_RESULT)
+  file(REMOVE "${ROCM_NETIB_FILE}")
+  message(FATAL_ERROR
+    "NET/IB ROCm: failed to apply ${ROCM_NETIB_PATCH_FILE} to ${ROCM_NETIB_FILE} "
+    "(exit code ${ROCM_NETIB_PATCH_RESULT}).\n"
+    "${ROCM_NETIB_PATCH_ERROR}\n"
+    "${ROCM_NETIB_PATCH_OUTPUT}")
+endif()
 execute_process(
   COMMAND bash -c "sed -i 's/NCCL_PARAM(Ib/NCCL_PARAM(RocmIb/g' ${ROCM_NETIB_FILE}"
   WORKING_DIRECTORY ${RCCL_SRC_DIR}
@@ -216,6 +255,14 @@ execute_process(
 )
 execute_process(
   COMMAND bash -c "sed -i 's/ncclIbDeregMr/rocmIbDeregMr/g' ${ROCM_NETIB_FILE}"
+  WORKING_DIRECTORY ${RCCL_SRC_DIR}
+)
+execute_process(
+  COMMAND bash -c "sed -i 's/ncclIbSetProxyChecksum/rocmIbSetProxyChecksum/g' ${ROCM_NETIB_FILE}"
+  WORKING_DIRECTORY ${RCCL_SRC_DIR}
+)
+execute_process(
+  COMMAND bash -c "sed -i 's/ncclIbGetRecvChecksums/rocmIbGetRecvChecksums/g' ${ROCM_NETIB_FILE}"
   WORKING_DIRECTORY ${RCCL_SRC_DIR}
 )
 execute_process(

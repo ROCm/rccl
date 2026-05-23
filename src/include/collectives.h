@@ -80,6 +80,9 @@ struct ncclConnFifo {
   int offset;
   ssize_t size;
   void* ptr;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  uint32_t checksum; // GPU -> proxy: quick xor checksum of step payload
+#endif
 };
 
 #include <stdio.h>

@@ -794,6 +794,19 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     comm->gfx9BarrierMode = bm;
     tmpCommAndChans.comm.gfx9BarrierMode = bm;
   }
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // Compile the kernel-side XOR checksum out of the hot path when both net
+  // transports have it disabled. The accessors are defined by RCCL_PARAM in
+  // src/transport/net_ib.cc and src/transport/net_socket.cc; both .cc files
+  // are unconditionally linked into librccl so the externs always resolve.
+  {
+    extern int64_t rcclParamIbRdmaChecksum();
+    extern int64_t rcclParamSocketChecksum();
+    int const nce = (rcclParamIbRdmaChecksum() != 0 || rcclParamSocketChecksum() != 0) ? 1 : 0;
+    comm->netChecksumEnabled = nce;
+    tmpCommAndChans.comm.netChecksumEnabled = nce;
+  }
+#endif
   for (int p=0; p < NCCL_NUM_PROTOCOLS; p++) {
     tmpCommAndChans.comm.buffSizes[p] = comm->buffSizes[p];
   }
@@ -834,6 +847,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     int const bfm = comm->gfx9BarrierMode;
     INFO(NCCL_INIT, "GFX9 BarrierFenceMode: %s (RCCL_GFX9_BARRIER=%d)",
          (unsigned)bfm <= 2u ? kGfx9BarrierFenceModeStr[bfm] : kGfx9BarrierFenceModeStr[0], bfm);
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    INFO(NCCL_INIT, "Kernel net checksum: %s (gates kernel XOR; per-transport verify still honors its own env)",
+         comm->netChecksumEnabled ? "On" : "Off");
+#endif
   }
 
   if (ncclGdrCopy != NULL && ncclParamGdrCopyFifoEnable() == 1) {

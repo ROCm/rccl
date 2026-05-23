@@ -33,6 +33,7 @@ option(ENABLE_MSCCLPP_EXECUTOR                 "Enable MSCCL++ Executor"        
 option(ENABLE_MSCCLPP_FORMAT_CHECKS            "Enable formatting checks in MSCCL++"           OFF)
 option(ENABLE_NPKIT                            "Enable NPKit"                                  OFF)
 option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+option(ENABLE_IB_NET_CHECKSUM                  "Enable RCCL IB/socket net XOR checksum"        ON)
 option(GENERATE_SYM_KERNELS                    "Generate symmetric memory kernels"             OFF)
 option(INSTALL_DEPENDENCIES                    "Force install dependencies"                    OFF)
 option(REPORT_KERNEL_RESOURCE_USE              "Append -Rpass-analysis=kernel to CXX flags"    OFF)
@@ -688,6 +689,7 @@ set(SRC_FILES
   src/transport/generic.cc
   src/transport/net.cc
   src/transport/net_ib.cc
+  src/transport/net_ib_checksum.h
   src/transport/net_ib_rocm.cc
   src/transport/net_socket.cc
   src/transport/nvls.cc
@@ -936,6 +938,8 @@ endif()
 ## Set RCCL include directories
 target_include_directories(rccl PRIVATE ${PROJECT_BINARY_DIR}/include)        # for generated rccl.h header
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src)                    # for hipfied headers
+target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/transport)          # for net_ib_checksum.h
+target_include_directories(rccl PRIVATE ${CMAKE_SOURCE_DIR}/src/transport)    # for generated net_ib_rocm.cc
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/device/network/unpack)
 target_include_directories(rccl PRIVATE ${HIPIFY_DIR}/src/include)
@@ -968,6 +972,20 @@ if(HAVE_ROCM_SMI64CONFIG)
 endif()
 if(HAVE_ROCM_SMI_THREAD_ONLY_MUTEX)
   target_compile_definitions(rccl PRIVATE USE_ROCM_SMI_THREAD_ONLY_MUTEX)
+endif()
+
+# RCCL net (IB + socket) XOR checksum feature
+# Default ON. Set -DENABLE_IB_NET_CHECKSUM=OFF at configure time to compile
+# the entire feature out: kernel-side warp-cooperative XOR producer/verifier,
+# host-side proxy dispatch, IB IMM packing, and socket per-step checksum
+# header bytes are all dead-stripped. Both peers in a connection must be
+# built with the same value -- the wire format is gated, not negotiated.
+if(ENABLE_IB_NET_CHECKSUM)
+  target_compile_definitions(rccl PRIVATE RCCL_IB_CHECKSUM_DEVICE_ENABLED=1)
+  message(STATUS "RCCL IB/socket net checksum: ENABLED (-DENABLE_IB_NET_CHECKSUM=OFF to disable)")
+else()
+  target_compile_definitions(rccl PRIVATE RCCL_IB_CHECKSUM_DEVICE_ENABLED=0)
+  message(STATUS "RCCL IB/socket net checksum: DISABLED (RCCL_IB_CHECKSUM_DEVICE_ENABLED=0)")
 endif()
 
 # NPKit flags

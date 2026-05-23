@@ -10,6 +10,10 @@
 #include "net.h"
 #include "param.h"
 #include "profiler/net_socket.h"
+#include "net_socket_checksum.h"
+#include "net_ib_checksum.h"  // ncclIbImmFoldCsum: shared 12-bit fold so the
+                              // device-side cooperative XOR can compare
+                              // socket and IB checksums with the same path.
 
 #include <pthread.h>
 #include <stdlib.h>
@@ -129,6 +133,10 @@ NCCL_PARAM(SocketInlineSize, "SOCKET_INLINE", /*128 B=*/1 << 7);
 NCCL_PARAM(SocketMinTaskSize, "SOCKET_MIN_TASKSIZE", /*64 kiB=*/1 << 16);
 NCCL_PARAM(SocketNsocksPerThread, "NSOCKS_PERTHREAD", -2);
 NCCL_PARAM(SocketNthreads, "SOCKET_NTHREADS", -2);
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+RCCL_PARAM(SocketChecksum, "SOCKET_CHECKSUM", 0);
+RCCL_PARAM(SocketChecksumTrace, "SOCKET_CHECKSUM_TRACE", 0);
+#endif
 
 enum ncclNetSocketCommState {
   ncclNetSocketCommStateStart = 0,
@@ -179,6 +187,16 @@ struct ncclNetSocketRequest {
   struct ncclNetSocketComm* comm;
   struct ncclNetSocketTask* tasks[MAX_SOCKETS];
   int nSubs;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // For SEND: checksum (already folded XOR over the send buffer) snapshotted
+  // from comm->nextChecksum at Isend time; placed on the wire after the size
+  // header. For RECV: checksum parsed from the peer's header, verified
+  // against a fresh XOR over r->data once the payload has been fully
+  // received. Holds NCCL_NET_SOCKET_CHECKSUM_NONE when no checksum is
+  // attached to this request.
+  uint32_t checksum;
+  int checksumVerified;
+#endif
   struct ncclProfilerInfo pInfo;
 };
 
@@ -214,6 +232,21 @@ struct ncclNetSocketComm {
   int nThreads;
   int nextSock;
   void* inlineData;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // Pending checksum published by the proxy via ncclNetSocketSetProxyChecksum
+  // immediately before the next Isend on this sendComm. Consumed (and reset
+  // to NCCL_NET_SOCKET_CHECKSUM_NONE) inside ncclNetSocketIsend so a stale
+  // checksum cannot leak across sends.
+  uint32_t nextChecksum;
+  // Wire-received checksum from the most recently completed recv test() on
+  // this comm, already folded to 12 bits so it matches the IB IMM format the
+  // receiving kernel compares against. Read by net.cc through
+  // ncclNetSocketGetRecvChecksum and published into
+  // recvMem->connFifo[slot].checksum for the cooperative XOR verify in
+  // prims_simple.h. NCCL_NET_SOCKET_CHECKSUM_NONE means no checksum was
+  // attached (RCCL_SOCKET_CHECKSUM=0 on the sender, etc.).
+  uint32_t lastRecvChecksum;
+#endif
   struct ncclNetSocketRequest requests[MAX_REQUESTS];
   pthread_t helperThread[MAX_THREADS];
   struct ncclNetSocketThreadResources threadResources[MAX_THREADS];
@@ -363,7 +396,19 @@ fail:
   goto exit;
 }
 
+// Wire-format header sent at the start of every socket message. Layout:
+//   [0..4)  int      payload size  (size_t-narrowed)
+// When RCCL_IB_CHECKSUM_DEVICE_ENABLED, an extra 4 bytes are appended:
+//   [4..8)  uint32_t checksum      (NCCL_NET_SOCKET_CHECKSUM_NONE = disabled)
+// The checksum field is gated at compile time so a feature-disabled build
+// emits a smaller header and stays wire-compatible only with peers built
+// with the same gate. Both peers must use the same value of
+// RCCL_IB_CHECKSUM_DEVICE_ENABLED -- the wire format is not negotiated.
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+#define SOCKET_CTRL_SIZE (sizeof(int) + sizeof(uint32_t))
+#else
 #define SOCKET_CTRL_SIZE (sizeof(int))
+#endif
 ncclResult_t ncclNetSocketConnect(int dev, ncclNetCommConfig_t* config, void* opaqueHandle, void** sendComm, ncclNetDeviceHandle_t** /*sendDevComm*/) {
   if (dev < 0 || dev >= ncclNetIfs) { // data transfer socket is based on specified dev
     return ncclInternalError;
@@ -385,6 +430,15 @@ ncclResult_t ncclNetSocketConnect(int dev, ncclNetCommConfig_t* config, void* op
   comm->nSocks = handle->nSocks;
   comm->nThreads = handle->nThreads;
   comm->dev = dev;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // calloc zeroes the comm, but 0 is a legal XOR value; explicitly mark
+  // "no checksum pending" so the first Isend before a setProxyChecksum
+  // call cannot stamp a stale all-zero checksum onto the wire. We do the
+  // same for the recv-side stash so a kernel verify cannot fire before any
+  // recv has completed.
+  comm->nextChecksum = NCCL_NET_SOCKET_CHECKSUM_NONE;
+  comm->lastRecvChecksum = NCCL_NET_SOCKET_CHECKSUM_NONE;
+#endif
   CUDACHECK(cudaGetDevice(&comm->cudaDev));
   for (; i<comm->nSocks+1; i++) {
     sock = (i == comm->nSocks) ? &comm->ctrlSock : comm->socks+i;
@@ -476,6 +530,10 @@ ncclResult_t ncclNetSocketGetRequest(struct ncclNetSocketComm* comm, int op, voi
       r->used = 1;
       r->comm = comm;
       r->nSubs = 0;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      r->checksum = NCCL_NET_SOCKET_CHECKSUM_NONE;
+      r->checksumVerified = 0;
+#endif
       r->inlineData = (uint8_t*)comm->inlineData + i * (SOCKET_CTRL_SIZE + ncclParamSocketInlineSize());
       *req = r;
       return ncclSuccess;
@@ -484,6 +542,29 @@ ncclResult_t ncclNetSocketGetRequest(struct ncclNetSocketComm* comm, int op, voi
   WARN("NET/Socket : unable to allocate requests");
   return ncclInternalError;
 }
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+ncclResult_t ncclNetSocketGetRecvChecksum(void* recvComm, int n, uint32_t* checksums) {
+  if (checksums == NULL) return ncclSuccess;
+  struct ncclNetSocketComm* comm = (struct ncclNetSocketComm*)recvComm;
+  // Socket plugin only supports n==1 recv (ncclNetSocketIrecv enforces it);
+  // we still respect the caller's n so the dispatch in net.cc can pass the
+  // same subCount for every transport without special-casing.
+  if (n > 0) checksums[0] = comm ? comm->lastRecvChecksum : NCCL_NET_SOCKET_CHECKSUM_NONE;
+  for (int i = 1; i < n; i++) checksums[i] = NCCL_NET_SOCKET_CHECKSUM_NONE;
+  return ncclSuccess;
+}
+
+void ncclNetSocketSetProxyChecksum(void* sendComm, int /*slot*/, uint32_t checksum) {
+  // ncclNetSocketGetRequest does not allocate request slots in proxy slot
+  // order, so we cannot index a per-slot array safely. The proxy invariant
+  // (a single setProxyChecksum followed by exactly one Isend per iteration
+  // on a given sendComm; see netSetProxyChecksum call site in net.cc) makes
+  // a single pending value sufficient: Isend snapshots and clears it.
+  struct ncclNetSocketComm* comm = (struct ncclNetSocketComm*)sendComm;
+  if (comm) comm->nextChecksum = checksum;
+}
+#endif // RCCL_IB_CHECKSUM_DEVICE_ENABLED
 
 ncclResult_t ncclNetSocketGetTask(struct ncclNetSocketComm* comm, struct ncclProfilerInfo* pInfo, int op, void* data, int size, struct ncclNetSocketTask** req) {
   int tid = comm->nextSock % comm->nThreads;
@@ -530,6 +611,35 @@ ncclResult_t ncclNetSocketGetTask(struct ncclNetSocketComm* comm, struct ncclPro
 // if the dataSize is smaller than the inline size, return the inline size; if not, return 0 to avoid the extra copy.
 static int ncclNetSocketInlineSize(int dataSize) { return (dataSize <= ncclParamSocketInlineSize()) ? dataSize : 0; }
 
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+// Publish the wire-received checksum from a completed recv request into the
+// owning comm's lastRecvChecksum slot so net.cc can forward it to the kernel
+// (see ncclNetSocketGetRecvChecksum). We pack the byte count and the folded
+// 12-bit checksum into a single 32-bit word using ncclIbImmPack so the
+// device-side cooperative verify in prims_simple.h has one unified format
+// regardless of which transport delivered the payload: size lives in the
+// low NCCL_IB_IMM_SIZE_BITS, folded csum in the upper NCCL_IB_IMM_CSUM_BITS,
+// and 0xffffffff (NCCL_NET_SOCKET_CHECKSUM_NONE) is the "no checksum" code.
+// The 32->12 bit fold drops our theoretical detection rate from 1/2^32 to
+// 1/4096 on socket, which is the price for unifying the device verify; TCP's
+// own CRC32 already covers single-bit corruption below us.
+static void ncclNetSocketStashRecvChecksum(struct ncclNetSocketRequest* r) {
+  if (r == NULL || r->op != NCCL_SOCKET_RECV || r->comm == NULL) return;
+  uint32_t packed;
+  if (!rcclParamSocketChecksum() || r->checksum == NCCL_NET_SOCKET_CHECKSUM_NONE
+      || !ncclIbImmCanPack(r->size)) {
+    packed = NCCL_NET_SOCKET_CHECKSUM_NONE;
+  } else {
+    packed = ncclIbImmPack(r->size, r->checksum);
+    if (rcclParamSocketChecksumTrace())
+      TRACE(NCCL_NET, "NET/Socket: csum stash size=%d wire=0x%x packed=0x%x",
+        r->size, r->checksum, packed);
+  }
+  r->comm->lastRecvChecksum = packed;
+  r->checksumVerified = 1;
+}
+#endif // RCCL_IB_CHECKSUM_DEVICE_ENABLED
+
 ncclResult_t ncclNetSocketTest(void* request, int* done, int* size) {
   *done = 0;
   struct ncclNetSocketRequest *r = (struct ncclNetSocketRequest*)request;
@@ -544,7 +654,13 @@ ncclResult_t ncclNetSocketTest(void* request, int* done, int* size) {
       // sender side has the right data size, copy size info + inline data to the buffer
       int inlineSize = ncclNetSocketInlineSize(r->size);
       msgSize = inlineSize + SOCKET_CTRL_SIZE;
-      memcpy(msg, &r->size, SOCKET_CTRL_SIZE);
+      memcpy(msg, &r->size, sizeof(int));
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      uint32_t wireCsum = rcclParamSocketChecksum() ? r->checksum : NCCL_NET_SOCKET_CHECKSUM_NONE;
+      memcpy(msg + sizeof(int), &wireCsum, sizeof(uint32_t));
+      if (rcclParamSocketChecksumTrace() && wireCsum != NCCL_NET_SOCKET_CHECKSUM_NONE)
+        TRACE(NCCL_NET, "NET/Socket: csum send size=%d csum=0x%x", r->size, wireCsum);
+#endif
       if (inlineSize > 0) memcpy(msg + SOCKET_CTRL_SIZE, r->data, inlineSize);
     } else {
       // receiver side doesn't have the right data size, wait for the sender to send it
@@ -553,7 +669,10 @@ ncclResult_t ncclNetSocketTest(void* request, int* done, int* size) {
         NCCLCHECK(ncclSocketProgress(r->op, r->ctrlSock, msg, SOCKET_CTRL_SIZE, &sizeOffset));
         if (sizeOffset == 0) return ncclSuccess; /* not ready yet*/
       }
-      memcpy(&senderSize, msg, SOCKET_CTRL_SIZE);
+      memcpy(&senderSize, msg, sizeof(int));
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+      memcpy(&r->checksum, msg + sizeof(int), sizeof(uint32_t));
+#endif
       if (senderSize > r->size) {
         char line[SOCKET_NAME_MAXLEN + 1];
         union ncclSocketAddress addr;
@@ -600,6 +719,9 @@ ncclResult_t ncclNetSocketTest(void* request, int* done, int* size) {
         if (sub->offset == sub->size) nCompleted++;
       }
       if (nCompleted == r->nSubs) {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+        ncclNetSocketStashRecvChecksum(r);
+#endif
         if (size) *size = r->size;
         *done = 1;
         r->used = 0;
@@ -623,6 +745,9 @@ ncclResult_t ncclNetSocketTest(void* request, int* done, int* size) {
         NCCLCHECK(ncclSocketProgress(r->op, r->ctrlSock, r->data, r->size, &r->offset));
       }
       if (r->offset == r->size) {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+        ncclNetSocketStashRecvChecksum(r);
+#endif
         if (size) *size = r->size;
         *done = 1;
         r->used = 0;
@@ -644,9 +769,16 @@ ncclResult_t ncclNetSocketDeregMr(void* comm, void* mhandle) { return ncclSucces
 ncclResult_t ncclNetSocketIsend(void* sendComm, void* data, size_t size, int tag, void* mhandle, void* phandle, void** request) {
   struct ncclNetSocketComm* comm = (struct ncclNetSocketComm*)sendComm;
   NCCLCHECK(ncclNetSocketGetRequest(comm, NCCL_SOCKET_SEND, data, (int) size, (struct ncclNetSocketRequest**)request));
+  struct ncclNetSocketRequest* req = *(struct ncclNetSocketRequest **)request;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  // Consume the checksum that the proxy published immediately before this
+  // Isend (via ncclNetSocketSetProxyChecksum). Reset the comm slot so a
+  // missed setProxyChecksum on a later send cannot inherit a stale value.
+  req->checksum = comm->nextChecksum;
+  comm->nextChecksum = NCCL_NET_SOCKET_CHECKSUM_NONE;
+#endif
 #ifdef NCCL_ENABLE_NET_PROFILING
   // NCCL core profiler callback
-  struct ncclNetSocketRequest* req = *(struct ncclNetSocketRequest **)request;
   req->pInfo.pHandle = phandle;
 #endif
   return ncclSuccess;

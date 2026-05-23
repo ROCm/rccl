@@ -506,6 +506,9 @@ struct ncclComm {
   int rcclUseOneSlice; // RCCL: true if this comm is using one slice per primitive
   int gfx9CheapFenceMode; // RCCL: ncclGfx9PostPeerFenceMode (0 cheap, 1 threadfence, 2 threadfence_system)
   int gfx9BarrierMode; // RCCL: ncclGfx9BarrierFenceMode for ProtoSimple barrier()
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+  int netChecksumEnabled; // RCCL: 1 iff IB or socket transport CSUM is on (gates kernel-side XOR)
+#endif
   int localRank;
   int localRanks;
   int maxLocalRanks;

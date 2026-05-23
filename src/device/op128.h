@@ -11,6 +11,14 @@
 
 #include "device/rccl_ptr.h"
 
+// Mirror the RCCL_IB_CHECKSUM_DEVICE_ENABLED gate from device.h with the
+// same #ifndef pattern so this header compiles correctly regardless of
+// whether device.h has already been included by the TU; CMake -D
+// overrides reach both definitions identically.
+#ifndef RCCL_IB_CHECKSUM_DEVICE_ENABLED
+#define RCCL_IB_CHECKSUM_DEVICE_ENABLED 1
+#endif
+
 inline __device__ void load128(const uint64_t* ptr, uint64_t &v0, uint64_t &v1) {
   v0 = __builtin_nontemporal_load((u64_gptr) ptr);
   v1 = __builtin_nontemporal_load((u64_gptr) ptr+1);
@@ -387,7 +395,21 @@ __device__ __forceinline__ void st_release_sys_global(uint64_t *ptr, uint64_t va
 }
 
 __device__ __forceinline__ void fence_acq_rel_sys() {
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED && (defined(__HIPCC__) || defined(__HIP_PLATFORM_AMD__))
+    // On GFX9, STORE(connStepPtr, ...) and st_relaxed_sys_global() compile down
+    // to relaxed atomics / __builtin_nontemporal_store, so without this fence
+    // the proxy can observe the tail bump before the preceding
+    // connFifo[slot].checksum / connFifo[slot].size store has reached the host
+    // cacheline. That race manifested as deterministic "expected 0x0 got 0xNN"
+    // mismatches in the IB host verify (sender publishing stale init csum).
+    // All four call sites in prims_simple.h gate this on (flags & ConnFifoEnabled)
+    // so only proxy-mediated transfers pay the cost. Only emitted when the
+    // checksum feature is compiled in -- without it there is no kernel-side
+    // checksum store that needs to retire before the tail bump.
+    __threadfence_system();
+#else
     //asm volatile("membar.sys;" ::: "memory");
+#endif
 }
 __device__ __forceinline__ void fence_acq_rel_gpu() {
     //asm volatile("membar.gl;" ::: "memory");

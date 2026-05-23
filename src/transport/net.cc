@@ -22,10 +22,18 @@
 #include "graph/topo.h"
 #include "nccl_net.h"
 #include "register_inline.h"
+
 #if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
 #endif
 #include "msccl/msccl_lifecycle.h"
+#include "net_ib_checksum.h"
+#include "net_socket_checksum.h"
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+static_assert(NCCL_IB_CHECKSUM_NONE == NCCL_NET_SOCKET_CHECKSUM_NONE,
+  "Transport-agnostic 'no checksum' sentinel must agree across transports");
+#endif
 
 static_assert(sizeof(ncclNetHandle_t) <= CONNECT_SIZE, "NET Connect info is too large");
 
@@ -934,7 +942,16 @@ static ncclResult_t sendProxyConnect(struct ncclProxyConnection* connection, str
   // Don't give credits yet in shared mode.
   (resources->gdcSync ? *resources->gdcSync : resources->sendMem->head) =
     (map->shared ? -NCCL_STEPS : 0);
-  for (int i=0; i<NCCL_STEPS; i++) resources->recvMem->connFifo[i].size = -1;
+  for (int i=0; i<NCCL_STEPS; i++) {
+    resources->recvMem->connFifo[i].size = -1;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // On the send side the kernel always overwrites checksum before bumping
+    // the tail, so this slot value is never observed. We initialize to the
+    // shared "no checksum" sentinel anyway so the field has a single,
+    // documented default across send and recv resources.
+    resources->recvMem->connFifo[i].checksum = NCCL_IB_CHECKSUM_NONE;
+#endif
+  }
 
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     resources->buffers[p] = NCCL_NET_MAP_GET_POINTER(map, cpu, buffs[p]);
@@ -1128,7 +1145,17 @@ static ncclResult_t recvProxyConnect(struct ncclProxyConnection* connection, str
 
   resources->sendMem = (struct ncclSendMem*) NCCL_NET_MAP_GET_POINTER(map, cpu, sendMem);
   resources->recvMem = (struct ncclRecvMem*) NCCL_NET_MAP_GET_POINTER(map, cpu, recvMem);
-  for (int i = 0; i < NCCL_STEPS; i++) resources->recvMem->connFifo[i].size = -1;
+  for (int i = 0; i < NCCL_STEPS; i++) {
+    resources->recvMem->connFifo[i].size = -1;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+    // NCCL_IB_CHECKSUM_NONE (== NCCL_NET_SOCKET_CHECKSUM_NONE, see static
+    // assert above) is the "no checksum present" sentinel the kernel-side
+    // cooperative verify in prims_simple.h checks for before doing the XOR.
+    // Initializing to 0 (a legal folded csum value) would cause the very
+    // first slice to spuriously look "verifiable" and likely mismatch.
+    resources->recvMem->connFifo[i].checksum = NCCL_IB_CHECKSUM_NONE;
+#endif
+  }
   for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     resources->buffers[p] = NCCL_NET_MAP_GET_POINTER(map, cpu, buffs[p]);
     if (resources->buffers[p]) {
@@ -1257,6 +1284,45 @@ static ncclResult_t recvProxyFree(struct ncclProxyConnection* connection, struct
 }
 
 static_assert(NCCL_STEPS <= NCCL_NET_MAX_REQUESTS, "Not enough net requests to cover for steps");
+
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+static void netSetProxyChecksum(struct ncclProxyState* proxyState, void* sendComm,
+    int slot, uint32_t checksum) {
+  if (proxyState->ncclNet == &ncclNetIb) {
+    ncclIbSetProxyChecksum(sendComm, slot, checksum);
+  }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  else if (proxyState->ncclNet == &rocmNetIb) {
+    rocmIbSetProxyChecksum(sendComm, slot, checksum);
+  }
+#endif
+  else if (proxyState->ncclNet == &ncclNetSocket) {
+    ncclNetSocketSetProxyChecksum(sendComm, slot, checksum);
+  }
+}
+
+// Mirror of netSetProxyChecksum for the recv direction. Pulls the wire
+// checksums stashed by the last completed test() out of the built-in IB or
+// socket plugin so progressRecv can forward them to the kernel via
+// recvMem->connFifo[buffSlot].checksum. External plugins do not produce
+// RCCL-format checksums; their entries are left as NCCL_IB_CHECKSUM_NONE so
+// the kernel-side cooperative verify treats those steps as unverifiable.
+static void netGetProxyChecksum(struct ncclProxyState* proxyState, void* recvComm,
+    int n, uint32_t* checksums) {
+  for (int i=0; i<n; i++) checksums[i] = NCCL_IB_CHECKSUM_NONE;
+  if (proxyState->ncclNet == &ncclNetIb) {
+    (void)ncclIbGetRecvChecksums(recvComm, n, checksums);
+  }
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+  else if (proxyState->ncclNet == &rocmNetIb) {
+    (void)rocmIbGetRecvChecksums(recvComm, n, checksums);
+  }
+#endif
+  else if (proxyState->ncclNet == &ncclNetSocket) {
+    (void)ncclNetSocketGetRecvChecksum(recvComm, n, checksums);
+  }
+}
+#endif // RCCL_IB_CHECKSUM_DEVICE_ENABLED
 
 #if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_NET_COLLECT_POLL_CNT)
 static int g_npkit_net_poll_cnt = 0;
@@ -1393,6 +1459,10 @@ static ncclResult_t sendProxyProgress(struct ncclProxyState* proxyState, struct 
             // coverity[use_invalid:FALSE]
             void* phandle = &sub->pHandles[DIVUP(transmittedStepId, args->sliceSteps)%NCCL_STEPS];
             void **requestPtr = sub->requests+buffSlot;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+            uint32_t kernelCsum = (p == NCCL_PROTO_SIMPLE) ? connFifo[buffSlot].checksum : NCCL_IB_CHECKSUM_NONE;
+            netSetProxyChecksum(proxyState, resources->netSendComm, buffSlot, kernelCsum);
+#endif
             // for LL/LL128 protocols, completion event for write operation is not needed on the receiver side as
             // the LL flags are actively polled to detect if full data is received or not, so this hint can be used
             // by network plugin to optimize the transport for LL/LL128
@@ -1673,6 +1743,21 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
           int needFlush = 0;
           int totalSize = 0;
           for (int i=0; i<NCCL_PROXY_MAX_SUBS; i++) totalSize += sizes[i];
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+          // Pull the wire checksums the plugin stashed inside test() while
+          // the request is still mapped 1:1 to this subGroup. Must happen
+          // before any other test() call on this recvComm (i.e. before the
+          // next iteration of the outer subGroup loop), otherwise the
+          // per-comm stash in the IB/socket plugin would be overwritten.
+          // The group's subs all share one recvComm (irecv issued with the
+          // last sub's resources->netRecvComm a few lines up), so any sub
+          // in the group resolves to the same plugin comm.
+          uint32_t recvChecksums[NCCL_PROXY_MAX_SUBS];
+          {
+            struct recvNetResources* gRes = (struct recvNetResources*)(subGroup->connection->transportResources);
+            netGetProxyChecksum(proxyState, gRes->netRecvComm, subGroup->groupSize, recvChecksums);
+          }
+#endif
           for (int i=0; i<subGroup->groupSize; i++) {
             struct ncclProxySubArgs* sub = subGroup + i;
 
@@ -1696,6 +1781,18 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct 
             struct recvNetResources* resources = (struct recvNetResources*)(sub->connection->transportResources);
             volatile struct ncclConnFifo* connFifo = (volatile struct ncclConnFifo*)resources->recvMem->connFifo;
             connFifo[buffSlot].size = -1;
+#if RCCL_IB_CHECKSUM_DEVICE_ENABLED
+            // Forward the wire checksum to the receive kernel via the same
+            // connFifo slot it already polls for offset/size. Only SIMPLE
+            // protocol carries a meaningful folded checksum from either
+            // transport; LL/LL128 paths will see NCCL_IB_CHECKSUM_NONE here
+            // because the senders never populated the IMM / socket header
+            // checksum field for those slots. The matching memory barrier
+            // before the tail bump (see __sync_synchronize() in the
+            // transmitted loop) makes this write visible to the kernel
+            // before it observes the advanced tail.
+            connFifo[buffSlot].checksum = (p == NCCL_PROTO_SIMPLE) ? recvChecksums[i] : NCCL_IB_CHECKSUM_NONE;
+#endif
             sub->transSize = sizes[i];
             sub->received += args->sliceSteps;
             ncclProfilerRecordProxyStepEventState(s+i, args, receivedStepId, ncclProfilerProxyStepRecvFlushWait);
