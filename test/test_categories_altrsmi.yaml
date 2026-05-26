@@ -5,6 +5,7 @@
 #   quick — canonical anchor; NCCL_DEBUG=INFO for library logging.
 #   standard — merge quick; override labels.
 #   full — merge quick; override labels.
+#   comprehensive — merge quick; override labels.
 
 test_categories:
   quick: &altrsmi_quick
@@ -38,6 +39,14 @@ test_categories:
       - "full_regression"
       - "altrsmi"
       - "debug"
+  comprehensive:
+    <<: *altrsmi_quick
+    labels:
+      - "rccl"
+      - "comprehensive"
+      - "comprehensive_regression"
+      - "altrsmi"
+      - "debug"
 
 execution_settings:
   timeout_multiplier: 1
@@ -45,3 +54,4 @@ execution_settings:
     quick: 600
     standard: 600
     full: 600
+    comprehensive: 600

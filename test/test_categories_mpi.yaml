@@ -5,14 +5,18 @@
 #   quick — P2P smoke.
 #   standard — same test_patterns as full; lighter env.
 #   full — same test_patterns as standard; adds env (rank logs, implicit launch order,
-#     P2P/SHM CE memcpy flags). See env_variables under full.
+#     P2P/SHM CE memcpy flags).
+#   comprehensive_base — same as full; no NCCL_PROTO / NCCL_ALGO.
+#   comprehensive_base / comprehensive_pow2_* — label "comprehensive" + comprehensive_regression for CI.
+#   comprehensive_pow2_* — forced NCCL_PROTO / NCCL_ALGO.
+#     Rank count from the job (e.g. NGPU); np in {1,2,4,8} for pow2.
 
 test_categories:
   quick:
     description: "MPI smoke — point-to-point transport only (fast feedback)."
     test_patterns:
       - "P2pMPITest.*"
-    exclude_windows:
+    exclude_windows: &mpi_exclude_windows
       - "*"
     labels:
       - "rccl"
@@ -30,8 +34,7 @@ test_categories:
       - "ShmMPITest.*"
       - "NetIbMPITest.*"
       - "ImplicitLaunchOrderMPITest.*"
-    exclude_windows:
-      - "*"
+    exclude_windows: *mpi_exclude_windows
     labels:
       - "rccl"
       - "standard"
@@ -42,8 +45,24 @@ test_categories:
   full:
     description: "MPI exhaustive — same suites as standard; env enables implicit launch, CE memcpy paths, and verbose rank logs."
     test_patterns: *mpi_all_patterns
-    exclude_windows:
-      - "*"
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
+      - "mpi"
+    env_variables: &mpi_full_env
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      # P2pMPITests / ShmMPITests: enable CE memcpy sub-paths (default off in transport NCCL_PARAM).
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+  full_disable_env:
+    description: "MPI exhaustive — same suites as standard; env enables implicit launch, CE memcpy paths, and verbose rank logs."
+    test_patterns:
+      - "ImplicitLaunchOrderMPITest.MultiCommunicatorChain*"
+    exclude_windows: *mpi_exclude_windows
     labels:
       - "rccl"
       - "full"
@@ -51,11 +70,70 @@ test_categories:
       - "mpi"
     env_variables:
       - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=0"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=0"
+  comprehensive_base:
+    description: "Same patterns and env as full — auto algorithm/protocol selection (no NCCL_PROTO / NCCL_ALGO)."
+    test_patterns: *mpi_all_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "comprehensive"
+      - "comprehensive_regression"
+    env_variables: *mpi_full_env
+  comprehensive_pow2_ring_simple:
+    description: "Same as full — forces Ring + Simple. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
+    test_patterns: *mpi_all_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "comprehensive"
+      - "comprehensive_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
       - "RCCL_MPI_LOG_ALL_RANKS=1"
       - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
-      # P2pMPITests / ShmMPITests: enable CE memcpy sub-paths (default off in transport NCCL_PARAM).
       - "NCCL_P2P_USE_CUDA_MEMCPY=1"
       - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "NCCL_PROTO=Simple"
+      - "NCCL_ALGO=Ring"
+  comprehensive_pow2_tree_simple:
+    description: "Same as full — forces Tree + Simple. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
+    test_patterns: *mpi_all_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "comprehensive"
+      - "comprehensive_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "NCCL_PROTO=Simple"
+      - "NCCL_ALGO=Tree"
+  comprehensive_pow2_ring_ll:
+    description: "Same as full — forces Ring + LL. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
+    test_patterns: *mpi_all_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "comprehensive"
+      - "comprehensive_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "NCCL_PROTO=LL"
+      - "NCCL_ALGO=Ring"
+  
 
 execution_settings:
   mpi_launch:
@@ -66,3 +144,7 @@ execution_settings:
     quick: 1200
     standard: 1200
     full: 1200
+    comprehensive_base: 1200
+    comprehensive_pow2_ring_simple: 1200
+    comprehensive_pow2_tree_simple: 1200
+    comprehensive_pow2_ring_ll: 1200

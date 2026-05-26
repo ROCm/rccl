@@ -6,6 +6,7 @@
 #     (RCCL_TEST_NETSOCKET_* for NetSocket retry tuning).
 #   standard — merge quick; override labels.
 #   full — merge quick; override labels.
+#   comprehensive — merge quick; override labels.
 
 test_categories:
   quick: &fixtures_debug_quick
@@ -52,6 +53,15 @@ test_categories:
       - "full_regression"
       - "fixtures"
       - "debug"
+  comprehensive:
+    <<: *fixtures_debug_quick
+    description: "Same patterns and env as quick; comprehensive labels."
+    labels:
+      - "rccl"
+      - "comprehensive"
+      - "comprehensive_regression"
+      - "fixtures"
+      - "debug"
 
 execution_settings:
   timeout_multiplier: 1
@@ -59,3 +69,4 @@ execution_settings:
     quick: 1200
     standard: 1200
     full: 1200
+    comprehensive: 1200

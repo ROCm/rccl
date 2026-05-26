@@ -4,7 +4,8 @@
 # Tiers:
 #   quick — smoke (curated patterns).
 #   standard — wildcards per suite.
-#   full — merges standard (labels, timeouts).
+#   full — merges standard; override labels.
+#   comprehensive — merge standard; override labels.
 
 test_categories:
   quick:
@@ -68,6 +69,13 @@ test_categories:
       - "full"
       - "full_regression"
       - "fixtures"
+  comprehensive:
+    <<: *fixtures_standard
+    labels:
+      - "rccl"
+      - "comprehensive"
+      - "comprehensive_regression"
+      - "fixtures"
 
 execution_settings:
   timeout_multiplier: 1
@@ -75,3 +83,4 @@ execution_settings:
     quick: 1200
     standard: 3600
     full: 3600
+    comprehensive: 3600
