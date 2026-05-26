@@ -19,6 +19,7 @@ test_categories:
       - "smoke"
       - "precheck"
       - "altrsmi"
+      - "debug"
     env_variables:
       - "NCCL_DEBUG=INFO"
 
@@ -29,6 +30,7 @@ test_categories:
       - "standard"
       - "regression"
       - "altrsmi"
+      - "debug"
 
   full:
     <<: *altrsmi_quick
@@ -37,6 +39,7 @@ test_categories:
       - "full"
       - "full_regression"
       - "altrsmi"
+      - "debug"
 
 execution_settings:
   timeout_multiplier: 1
