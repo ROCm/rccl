@@ -3,6 +3,7 @@
 #
 # Tiers:
 #   quick — smoke (curated patterns, tighter UT_*).
+#   quick_env_* — smoke env-overlays (narrow pattern set under non-default env).
 #   standard — broad (Suite.*, bounded UT_*).
 #   comprehensive — same patterns as standard; longer timeouts; wider UT_* sweeps
 #     (UT_DATATYPES/UT_REDOPS all use harness defaults).
@@ -142,6 +143,7 @@ test_categories:
       - "CollTraceUtilsTest.EventQueueOperationTest"
       - "CollTraceUtilsTest.EventQueueMultiThreadTest"
       - "CollTraceUtilsTest.getSizeMbTest"
+      - "AllReduce.ROCTX"
     exclude_windows: &unit_tests_exclude_windows
       - "*"
     labels:
@@ -152,6 +154,38 @@ test_categories:
     env_variables:
       - "NCCL_DEBUG=INFO"
       - "RCCL_LOG_ROCTX=1"
+      - "UT_MAX_GPUS=2"
+      - "UT_PROCESS_MASK=2"
+  quick_env_thread_name:
+    description: "AlltoAll graph capture under NCCL_SET_THREAD_NAME=1."
+    test_patterns:
+      - "AlltoAll.OutOfPlaceGraph*"
+    exclude_windows: *unit_tests_exclude_windows
+    labels:
+      - "rccl"
+      - "quick"
+      - "smoke"
+      - "precheck"
+    env_variables:
+      - "NCCL_DEBUG=VERSION"
+      - "NCCL_DEBUG_SUBSYS=ALL"
+      - "NCCL_SET_THREAD_NAME=1"
+      - "UT_MAX_GPUS=2"
+      - "UT_PROCESS_MASK=2"
+  quick_env_debug_subsystems:
+    description: "AlltoAll graph capture under TRACE-level logging across all subsystems."
+    test_patterns:
+      - "AlltoAll.OutOfPlaceGraph*"
+    exclude_windows: *unit_tests_exclude_windows
+    labels:
+      - "rccl"
+      - "quick"
+      - "smoke"
+      - "precheck"
+    env_variables:
+      - "NCCL_DEBUG=TRACE"
+      - "NCCL_DEBUG_FILE=cdcvg.dbg"
+      - "NCCL_DEBUG_SUBSYS=INIT,COLL,P2P,SHM,NET,GRAPH,TUNING,ENV,ALLOC,CALL,PROXY,NVLS,BOOTSTRAP,REG,PROFILE,RAS,VERBS"
       - "UT_MAX_GPUS=2"
       - "UT_PROCESS_MASK=2"
   standard:
@@ -340,6 +374,8 @@ execution_settings:
   timeout_multiplier: 1
   category_timeouts:
     quick: 1200
+    quick_env_thread_name: 1200
+    quick_env_debug_subsystems: 1200
     standard: 3600
     comprehensive: 7200
     full_base: 7200

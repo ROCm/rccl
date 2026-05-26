@@ -4,12 +4,11 @@
 # Tiers:
 #   quick — smoke (curated patterns).
 #   standard — wildcards per suite.
-#   full — merges standard; override labels.
-#   full — merge standard; override labels.
+#   comprehensive / full — merge standard; override labels.
 
 test_categories:
   quick:
-    description: "Smoke — curated BitOps / Comm / EnqueueCount cases (fast, representative)."
+    description: "Smoke — curated BitOps / Comm / EnqueueCount / DeviceOp128 cases (fast, representative)."
     test_patterns:
       - "DIVUP.*"
       - "ROUNDUP.*"
@@ -24,8 +23,19 @@ test_categories:
       - "eatHash.*"
       - "BitOpsTemplateAllIntTestsFixture.*"
       - "BitOpsTemplateUnsignedTestsFixture.*"
-      - "CommTests.Sorter"
+      - "CommTests.*"
       - "EnqueueCountTests.*"
+      - "PackRoundtripTest.LdStVolatileGlobalPtr"
+      - "PackRoundtripTest.LdStRelaxedSysGlobal"
+      - "PackRoundtripTest.LdStAcquireReleaseSysGlobal"
+      - "PackRoundtripTest.L2_VolatileGlobalPtr_MultiElement"
+      - "PackRoundtripTest.CvtaFromGlobal"
+      - "PackRoundtripTest.ShmemCvtPtr"
+      - "PackRoundtripTest.LoadStoreShmem128"
+      - "PackRoundtripTest.LoadShmemMisaligned128_*"
+      - "PackRoundtripTest.LoadStorePack_*"
+      - "PackRoundtripTest.L2_StorePackBoundary"
+      - "PackRoundtripTest.Store16Load16Global_Direct"
     exclude_windows:
       - "*"
     labels:
@@ -43,6 +53,7 @@ test_categories:
       - "EnqueueCountTests.*"
       - "BitOpsTemplateAllIntTestsFixture.*"
       - "BitOpsTemplateUnsignedTestsFixture.*"
+      - "PackRoundtripTest.*"
       - "DIVUP.*"
       - "ROUNDUP.*"
       - "ALIGN_POWER.*"
