@@ -325,6 +325,19 @@ if(BUILD_TESTS)
         )
     endif()
 
+    if(ROCM_VERSION VERSION_GREATER_EQUAL "60400" AND CMAKE_BUILD_TYPE MATCHES "Debug")
+        apply_test_category_labels(
+        rccl-UnitTestsFixturesDebug
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_categories_fixtures_debug.yaml"
+        "${PROJECT_BINARY_DIR}"
+        )
+        apply_test_category_labels(
+        rccl-UnitTestsAltRsmi
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_categories_altrsmi.yaml"
+        "${PROJECT_BINARY_DIR}"
+        )
+    endif()
+
     if(ENABLE_MPI_TESTS)
         apply_test_category_labels(
         rccl-UnitTestsMPI

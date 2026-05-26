@@ -1,14 +1,15 @@
-# CTest categories for rccl-UnitTestsFixtures only (ROCm 6.4+).
-# Sources: BitOpsTests.cpp, CommTests.cpp, EnqueueCountTests.cpp
-#
+# rccl-UnitTestsFixtures — shared/ctest schema (ROCm 6.4+).
 # RCCL does not support Windows: exclude_windows matches all tests so generated suites are empty on Windows.
-
+#
+# Tiers:
+#   quick — smoke (curated patterns).
+#   standard — wildcards per suite.
+#   full — merges standard (labels, timeouts).
 
 test_categories:
-  smoke_fixtures:
-    description: "Fixture-only GTest binary — header-only / template tests runnable in Release or Debug"
+  quick:
+    description: "Smoke — curated BitOps / Comm / EnqueueCount cases (fast, representative)."
     test_patterns:
-      # BitOpsTests.cpp — free functions
       - "DIVUP.*"
       - "ROUNDUP.*"
       - "ALIGN_POWER.*"
@@ -20,21 +21,59 @@ test_categories:
       - "u32fpDecode.*"
       - "getHash.*"
       - "eatHash.*"
-      # BitOpsTests.cpp — typed tests
       - "BitOpsTemplateAllIntTestsFixture.*"
       - "BitOpsTemplateUnsignedTestsFixture.*"
-      # CommTests.cpp
       - "CommTests.Sorter"
-      # EnqueueCountTests.cpp
       - "EnqueueCountTests.*"
     exclude_windows:
       - "*"
     labels:
       - "rccl"
+      - "quick"
       - "smoke"
+      - "precheck"
+      - "fixtures"
+    env_variables: &fixtures_env
+      - "NCCL_DEBUG=INFO"
+
+  standard: &fixtures_standard
+    description: "Broad regression — every suite in this binary (wildcard per suite), bounded timeouts."
+    test_patterns:
+      - "CommTests.*"
+      - "EnqueueCountTests.*"
+      - "BitOpsTemplateAllIntTestsFixture.*"
+      - "BitOpsTemplateUnsignedTestsFixture.*"
+      - "DIVUP.*"
+      - "ROUNDUP.*"
+      - "ALIGN_POWER.*"
+      - "ALIGN_SIZE.*"
+      - "u32fp8MaxValue.*"
+      - "u32fp8Decode.*"
+      - "u32fp8Encode.*"
+      - "u32fpEncode.*"
+      - "u32fpDecode.*"
+      - "getHash.*"
+      - "eatHash.*"
+    exclude_windows:
+      - "*"
+    labels:
+      - "rccl"
+      - "standard"
+      - "regression"
+      - "fixtures"
+    env_variables: *fixtures_env
+
+  full:
+    <<: *fixtures_standard
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
       - "fixtures"
 
 execution_settings:
   timeout_multiplier: 1
   category_timeouts:
-    smoke_fixtures: 1200
+    quick: 1200
+    standard: 3600
+    full: 3600

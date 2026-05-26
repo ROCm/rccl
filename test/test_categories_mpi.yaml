@@ -1,15 +1,31 @@
-# MPI GTest patterns for rccl-UnitTestsMPI (requires ENABLE_MPI_TESTS at configure time).
-# Sources: transport/P2pMPITests.cpp, NetMPITests.cpp, ShmMPITests.cpp, NetIbMPITests.cpp,
-#          ImplicitLaunchOrderMPITests.cpp
+# rccl-UnitTestsMPI — shared/ctest schema (requires ENABLE_MPI_TESTS at configure time).
+# RCCL does not support Windows: exclude_windows matches all tests so generated suites are empty on Windows.
 #
-# RCCL does not support Windows: exclude_windows documents intent; the CMake MPI test is Linux-oriented.
-#
-# Currently unusable; shared libary needs to be updated to allow for external binarys. 
+# Tiers:
+#   quick — P2P smoke.
+#   standard — same test_patterns as full; lighter env.
+#   full — same test_patterns as standard; adds env (rank logs, implicit launch order,
+#     P2P/SHM CE memcpy flags). See env_variables under full.
 
 test_categories:
-  nightly_mpi:
-    description: "MPI transport and launch-order GTests in rccl-UnitTestsMPI"
+  quick:
+    description: "MPI smoke — point-to-point transport only (fast feedback)."
     test_patterns:
+      - "P2pMPITest.*"
+    exclude_windows:
+      - "*"
+    labels:
+      - "rccl"
+      - "quick"
+      - "smoke"
+      - "precheck"
+      - "mpi"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+
+  standard:
+    description: "MPI regression — all transport / IB / implicit-launch suites (same patterns as full; lighter env)."
+    test_patterns: &mpi_all_patterns
       - "P2pMPITest.*"
       - "NetTransportMPITest.*"
       - "ShmMPITest.*"
@@ -18,12 +34,37 @@ test_categories:
     exclude_windows:
       - "*"
     labels:
-      - "nightly"
       - "rccl"
+      - "standard"
+      - "regression"
       - "mpi"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+
+  full:
+    description: "MPI exhaustive — same suites as standard; env enables implicit launch, CE memcpy paths, and verbose rank logs."
+    test_patterns: *mpi_all_patterns
+    exclude_windows:
+      - "*"
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
+      - "mpi"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      # P2pMPITests / ShmMPITests: enable CE memcpy sub-paths (default off in transport NCCL_PARAM).
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
 
 execution_settings:
+  mpi_launch:
+    executable: mpirun
+    np: "${NGPU}"
   timeout_multiplier: 1
   category_timeouts:
-    # NetIb large / multi-step cases can be slow on real IB
-    nightly_mpi: 1800
+    quick: 1200
+    standard: 1200
+    full: 1200
