@@ -82,5 +82,5 @@ execution_settings:
   category_timeouts:
     quick: 1200
     standard: 3600
-    full: 3600
+    comprehensive: 3600
     full: 3600

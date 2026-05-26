@@ -6,9 +6,15 @@
 #   standard — same test_patterns as comprehensive; lighter env.
 #   comprehensive — same test_patterns as standard; adds env (rank logs, implicit launch order,
 #     P2P/SHM CE memcpy flags).
-#   full_base — same as comprehensive; no NCCL_PROTO / NCCL_ALGO.
+#   full_base — same patterns/env as comprehensive; auto algorithm/protocol selection.
 #   full_base / full_pow2_* — label "full" + full_regression for CI.
-#   full_pow2_* — forced NCCL_PROTO / NCCL_ALGO.
+#   full_pow2_* — narrowed to the collective-issuing subset of MPI tests, run under
+#     forced (NCCL_ALGO, NCCL_PROTO) combinations. The other MPI suites (raw send/recv
+#     P2P/SHM/Net transport tests and direct net-plugin tests) never consult algo/proto,
+#     so re-running them under forced env vars adds runtime without coverage.
+#     Matrix: (Ring, Tree) x (Simple, LL, LL128). LL128 categories also set
+#     RCCL_LL128_FORCE_ENABLE=1 to bypass topo-based gating
+#     (LL128 string parsing itself is not compile-gated).
 #     Rank count from the job (e.g. NGPU); np in {1,2,4,8} for pow2.
 
 test_categories:
@@ -59,7 +65,7 @@ test_categories:
       - "NCCL_P2P_USE_CUDA_MEMCPY=1"
       - "NCCL_SHM_USE_CUDA_MEMCPY=1"
   comprehensive_disable_env:
-    description: "MPI exhaustive — same suites as standard; env enables implicit launch, CE memcpy paths, and verbose rank logs."
+    description: "MPI env-disabled sanity check — runs only ImplicitLaunchOrderMPITest.MultiCommunicatorChain* with RCCL_MPI_LOG_ALL_RANKS=0 and NCCL_LAUNCH_ORDER_IMPLICIT=0 to verify behavior when these env knobs are off."
     test_patterns:
       - "ImplicitLaunchOrderMPITest.MultiCommunicatorChain*"
     exclude_windows: *mpi_exclude_windows
@@ -82,9 +88,25 @@ test_categories:
       - "full"
       - "full_regression"
     env_variables: *mpi_comprehensive_env
+  full_disable_env:
+    description: "MPI env-disabled sanity check (full tier) — runs only ImplicitLaunchOrderMPITest.MultiCommunicatorChain* with RCCL_MPI_LOG_ALL_RANKS=0 and NCCL_LAUNCH_ORDER_IMPLICIT=0 to verify behavior when these env knobs are off."
+    test_patterns:
+      - "ImplicitLaunchOrderMPITest.MultiCommunicatorChain*"
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
+      - "mpi"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=0"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=0"
   full_pow2_ring_simple:
-    description: "Same as comprehensive — forces Ring + Simple. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
-    test_patterns: *mpi_all_patterns
+    description: "Collective subset under forced Ring + Simple. Run with np in {1,2,4,8} for pow2 rank sweep. Patterns narrowed to tests that issue NCCL collectives — algo/proto have no effect on raw send/recv or net-plugin tests."
+    test_patterns: &mpi_collective_patterns
+      - "P2pMPITest.P2pWithMemcpyTest"
+      - "ImplicitLaunchOrderMPITest.MultiCommunicatorChain"
     exclude_windows: *mpi_exclude_windows
     labels:
       - "rccl"
@@ -100,8 +122,8 @@ test_categories:
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Ring"
   full_pow2_tree_simple:
-    description: "Same as comprehensive — forces Tree + Simple. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
-    test_patterns: *mpi_all_patterns
+    description: "Collective subset under forced Tree + Simple. Run with np in {1,2,4,8} for pow2 rank sweep."
+    test_patterns: *mpi_collective_patterns
     exclude_windows: *mpi_exclude_windows
     labels:
       - "rccl"
@@ -117,8 +139,8 @@ test_categories:
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Tree"
   full_pow2_ring_ll:
-    description: "Same as comprehensive — forces Ring + LL. Run with np in {1,2,4,8} on RDMA systems for pow2 rank sweep."
-    test_patterns: *mpi_all_patterns
+    description: "Collective subset under forced Ring + LL. Run with np in {1,2,4,8} for pow2 rank sweep."
+    test_patterns: *mpi_collective_patterns
     exclude_windows: *mpi_exclude_windows
     labels:
       - "rccl"
@@ -133,7 +155,59 @@ test_categories:
       - "NCCL_SHM_USE_CUDA_MEMCPY=1"
       - "NCCL_PROTO=LL"
       - "NCCL_ALGO=Ring"
-  
+  full_pow2_tree_ll:
+    description: "Collective subset under forced Tree + LL. Run with np in {1,2,4,8} for pow2 rank sweep."
+    test_patterns: *mpi_collective_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "full"
+      - "full_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "NCCL_PROTO=LL"
+      - "NCCL_ALGO=Tree"
+  full_pow2_ring_ll128:
+    description: "Collective subset under forced Ring + LL128. Run with np in {1,2,4,8} for pow2 rank sweep. Requires LL128-capable build (HIP >= 6.1.33591); RCCL_LL128_FORCE_ENABLE=1 bypasses topo-based gating."
+    test_patterns: *mpi_collective_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "full"
+      - "full_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "RCCL_LL128_FORCE_ENABLE=1"
+      - "NCCL_PROTO=LL128"
+      - "NCCL_ALGO=Ring"
+  full_pow2_tree_ll128:
+    description: "Collective subset under forced Tree + LL128. Run with np in {1,2,4,8} for pow2 rank sweep. Requires LL128-capable build (HIP >= 6.1.33591); RCCL_LL128_FORCE_ENABLE=1 bypasses topo-based gating."
+    test_patterns: *mpi_collective_patterns
+    exclude_windows: *mpi_exclude_windows
+    labels:
+      - "rccl"
+      - "mpi"
+      - "full"
+      - "full_regression"
+    env_variables:
+      - "NCCL_DEBUG=INFO"
+      - "RCCL_MPI_LOG_ALL_RANKS=1"
+      - "NCCL_LAUNCH_ORDER_IMPLICIT=1"
+      - "NCCL_P2P_USE_CUDA_MEMCPY=1"
+      - "NCCL_SHM_USE_CUDA_MEMCPY=1"
+      - "RCCL_LL128_FORCE_ENABLE=1"
+      - "NCCL_PROTO=LL128"
+      - "NCCL_ALGO=Tree"
 
 execution_settings:
   mpi_launch:
@@ -144,7 +218,12 @@ execution_settings:
     quick: 1200
     standard: 1200
     comprehensive: 1200
+    comprehensive_disable_env: 1200
     full_base: 1200
+    full_disable_env: 1200
     full_pow2_ring_simple: 1200
     full_pow2_tree_simple: 1200
     full_pow2_ring_ll: 1200
+    full_pow2_tree_ll: 1200
+    full_pow2_ring_ll128: 1200
+    full_pow2_tree_ll128: 1200
