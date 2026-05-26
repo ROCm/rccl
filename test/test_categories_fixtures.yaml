@@ -5,7 +5,7 @@
 #   quick — smoke (curated patterns).
 #   standard — wildcards per suite.
 #   full — merges standard; override labels.
-#   comprehensive — merge standard; override labels.
+#   full — merge standard; override labels.
 
 test_categories:
   quick:
@@ -62,19 +62,19 @@ test_categories:
       - "regression"
       - "fixtures"
     env_variables: *fixtures_env
-  full:
-    <<: *fixtures_standard
-    labels:
-      - "rccl"
-      - "full"
-      - "full_regression"
-      - "fixtures"
   comprehensive:
     <<: *fixtures_standard
     labels:
       - "rccl"
       - "comprehensive"
       - "comprehensive_regression"
+      - "fixtures"
+  full:
+    <<: *fixtures_standard
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
       - "fixtures"
 
 execution_settings:
@@ -83,4 +83,4 @@ execution_settings:
     quick: 1200
     standard: 3600
     full: 3600
-    comprehensive: 3600
+    full: 3600

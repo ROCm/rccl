@@ -4,12 +4,12 @@
 # Tiers:
 #   quick — canonical anchor; NCCL_DEBUG=INFO for library logging.
 #   standard — merge quick; override labels.
-#   full — merge quick; override labels.
 #   comprehensive — merge quick; override labels.
+#   full — merge quick; override labels.
 
 test_categories:
   quick: &altrsmi_quick
-    description: "Smoke — full AltRsmiTest suite (single suite), short timeout."
+    description: "Smoke — comprehensive AltRsmiTest suite (single suite), short timeout."
     test_patterns:
       - "AltRsmiTest.*"
     exclude_windows:
@@ -31,14 +31,6 @@ test_categories:
       - "regression"
       - "altrsmi"
       - "debug"
-  full:
-    <<: *altrsmi_quick
-    labels:
-      - "rccl"
-      - "full"
-      - "full_regression"
-      - "altrsmi"
-      - "debug"
   comprehensive:
     <<: *altrsmi_quick
     labels:
@@ -47,11 +39,19 @@ test_categories:
       - "comprehensive_regression"
       - "altrsmi"
       - "debug"
+  full:
+    <<: *altrsmi_quick
+    labels:
+      - "rccl"
+      - "full"
+      - "full_regression"
+      - "altrsmi"
+      - "debug"
 
 execution_settings:
   timeout_multiplier: 1
   category_timeouts:
     quick: 600
     standard: 600
-    full: 600
     comprehensive: 600
+    full: 600

@@ -4,9 +4,9 @@
 # Tiers:
 #   quick — smoke (curated patterns, tighter UT_*).
 #   standard — broad (Suite.*, bounded UT_*).
-#   full — same patterns as standard; longer timeouts; wider UT_* sweeps
+#   comprehensive — same patterns as standard; longer timeouts; wider UT_* sweeps
 #     (UT_DATATYPES/UT_REDOPS all use harness defaults).
-#   comprehensive_* - forced NCCL_PROTO / NCCL_ALGO.
+#   full_* - forced NCCL_PROTO / NCCL_ALGO.
 #
 # Related:
 #   test_categories_fixtures.yaml
@@ -14,9 +14,9 @@
 #   test_categories_altrsmi.yaml
 #   test_categories_mpi.yaml
 #
-# comprehensive_base — same patterns and harness as full; 
+# full_base — same patterns and harness as comprehensive; 
 #   no NCCL_PROTO / NCCL_ALGO (auto tuning).
-# comprehensive_pow2_* Forced proto/algo combos - see below.
+# full_pow2_* Forced proto/algo combos - see below.
 
 test_categories:
   quick:
@@ -183,15 +183,15 @@ test_categories:
       - "UT_POW2_GPUS=1"
       - "UT_DATATYPES=ncclInt8,ncclUint8,ncclInt32,ncclUint32,ncclInt64,ncclUint64,ncclFloat32,ncclFloat64"
       - "UT_REDOPS=sum,prod,max,min"
-  full:
-    description: "Exhaustive for rccl-UnitTests — every case per suite (Suite.*), full harness sweeps, longest timeout."
+  comprehensive:
+    description: "Exhaustive for rccl-UnitTests — every case per suite (Suite.*), comprehensive harness sweeps, longest timeout."
     test_patterns: *all_patterns
     exclude_windows: *unit_tests_exclude_windows
     labels:
       - "rccl"
-      - "full"
-      - "full_regression"
-    env_variables: &unit_tests_full_env
+      - "comprehensive"
+      - "comprehensive_regression"
+    env_variables: &unit_tests_comprehensive_env
       - "NCCL_DEBUG=INFO"
       - "RCCL_LOG_ROCTX=1"
       - "UT_MIN_GPUS=1"
@@ -199,23 +199,23 @@ test_categories:
       - "UT_POW2_GPUS=0"
       - "UT_DATATYPES=all"
       - "UT_REDOPS=all"
-  comprehensive_base:
-    description: "Same patterns and harness as full — exhaustive sweeps with auto algorithm/protocol selection (no NCCL_PROTO / NCCL_ALGO)."
+  full_base:
+    description: "Same patterns and harness as comprehensive — exhaustive sweeps with auto algorithm/protocol selection (no NCCL_PROTO / NCCL_ALGO)."
     test_patterns: *all_patterns
     exclude_windows: *unit_tests_exclude_windows
     labels:
       - "rccl"
-      - "comprehensive"
-      - "comprehensive_regression"
-    env_variables: *unit_tests_full_env
-  comprehensive_pow2_ring_simple:
+      - "full"
+      - "full_regression"
+    env_variables: *unit_tests_comprehensive_env
+  full_pow2_ring_simple:
     description: "Exhaustive patterns — pow2 GPU counts 1–8 only (1,2,4,8); forces Ring + Simple (typical RDMA-friendly path)."
     test_patterns: *all_patterns
     exclude_windows: *unit_tests_exclude_windows
     labels:
       - "rccl"
-      - "comprehensive"
-      - "comprehensive_regression"
+      - "full"
+      - "full_regression"
     env_variables:
       - "NCCL_DEBUG=INFO"
       - "RCCL_LOG_ROCTX=1"
@@ -226,14 +226,14 @@ test_categories:
       - "UT_REDOPS=all"
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Ring"
-  comprehensive_pow2_tree_simple:
+  full_pow2_tree_simple:
     description: "Exhaustive patterns — pow2 GPU counts 1–8 only (1,2,4,8); forces Tree + Simple."
     test_patterns: *all_patterns
     exclude_windows: *unit_tests_exclude_windows
     labels:
       - "rccl"
-      - "comprehensive"
-      - "comprehensive_regression"
+      - "full"
+      - "full_regression"
     env_variables:
       - "NCCL_DEBUG=INFO"
       - "RCCL_LOG_ROCTX=1"
@@ -244,14 +244,14 @@ test_categories:
       - "UT_REDOPS=all"
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Tree"
-  comprehensive_pow2_ring_ll:
+  full_pow2_ring_ll:
     description: "Exhaustive patterns — pow2 GPU counts 1–8 only (1,2,4,8); forces Ring + LL."
     test_patterns: *all_patterns
     exclude_windows: *unit_tests_exclude_windows
     labels:
       - "rccl"
-      - "comprehensive"
-      - "comprehensive_regression"
+      - "full"
+      - "full_regression"
     env_variables:
       - "NCCL_DEBUG=INFO"
       - "RCCL_LOG_ROCTX=1"
@@ -268,8 +268,8 @@ execution_settings:
   category_timeouts:
     quick: 1200
     standard: 3600
-    full: 7200
-    comprehensive_base: 7200
-    comprehensive_pow2_ring_simple: 7200
-    comprehensive_pow2_tree_simple: 7200
-    comprehensive_pow2_ring_ll: 7200
+    comprehensive: 7200
+    full_base: 7200
+    full_pow2_ring_simple: 7200
+    full_pow2_tree_simple: 7200
+    full_pow2_ring_ll: 7200
