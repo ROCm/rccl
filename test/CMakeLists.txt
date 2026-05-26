@@ -304,4 +304,33 @@ if(BUILD_TESTS)
     rocm_install(TARGETS ${test_executable} COMPONENT tests)
   endforeach()
 
+  # Shared ROCm Libraries CTest categories (see shared/ctest/README.md)
+  if(NOT DEFINED ROCM_LIBRARIES_ROOT)
+    get_filename_component(ROCM_LIBRARIES_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+  endif()
+  include(${ROCM_LIBRARIES_ROOT}/shared/ctest/TestCategories.cmake)
+  enable_testing()
+
+  apply_test_category_labels(
+    rccl-UnitTests
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_categories.yaml"
+    "${PROJECT_BINARY_DIR}"
+  )
+
+  if(ROCM_VERSION VERSION_GREATER_EQUAL "60400")
+    apply_test_category_labels(
+      rccl-UnitTestsFixtures
+      "${CMAKE_CURRENT_SOURCE_DIR}/test_categories_fixtures.yaml"
+      "${PROJECT_BINARY_DIR}"
+    )
+  endif()
+
+  if(ENABLE_MPI_TESTS)
+    apply_test_category_labels(
+      rccl-UnitTestsMPI
+      "${CMAKE_CURRENT_SOURCE_DIR}/test_categories_mpi.yaml"
+      "${PROJECT_BINARY_DIR}"
+    )
+  endif()
+
 endif()

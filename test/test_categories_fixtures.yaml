@@ -1,0 +1,40 @@
+# CTest categories for rccl-UnitTestsFixtures only (ROCm 6.4+).
+# Sources: BitOpsTests.cpp, CommTests.cpp, EnqueueCountTests.cpp
+#
+# RCCL does not support Windows: exclude_windows matches all tests so generated suites are empty on Windows.
+
+
+test_categories:
+  smoke_fixtures:
+    description: "Fixture-only GTest binary — header-only / template tests runnable in Release or Debug"
+    test_patterns:
+      # BitOpsTests.cpp — free functions
+      - "DIVUP.*"
+      - "ROUNDUP.*"
+      - "ALIGN_POWER.*"
+      - "ALIGN_SIZE.*"
+      - "u32fp8MaxValue.*"
+      - "u32fp8Decode.*"
+      - "u32fp8Encode.*"
+      - "u32fpEncode.*"
+      - "u32fpDecode.*"
+      - "getHash.*"
+      - "eatHash.*"
+      # BitOpsTests.cpp — typed tests
+      - "BitOpsTemplateAllIntTestsFixture.*"
+      - "BitOpsTemplateUnsignedTestsFixture.*"
+      # CommTests.cpp
+      - "CommTests.Sorter"
+      # EnqueueCountTests.cpp
+      - "EnqueueCountTests.*"
+    exclude_windows:
+      - "*"
+    labels:
+      - "rccl"
+      - "smoke"
+      - "fixtures"
+
+execution_settings:
+  timeout_multiplier: 1
+  category_timeouts:
+    smoke_fixtures: 1200

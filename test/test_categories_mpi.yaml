@@ -1,0 +1,29 @@
+# MPI GTest patterns for rccl-UnitTestsMPI (requires ENABLE_MPI_TESTS at configure time).
+# Sources: transport/P2pMPITests.cpp, NetMPITests.cpp, ShmMPITests.cpp, NetIbMPITests.cpp,
+#          ImplicitLaunchOrderMPITests.cpp
+#
+# RCCL does not support Windows: exclude_windows documents intent; the CMake MPI test is Linux-oriented.
+#
+# Currently unusable; shared libary needs to be updated to allow for external binarys. 
+
+test_categories:
+  nightly_mpi:
+    description: "MPI transport and launch-order GTests in rccl-UnitTestsMPI"
+    test_patterns:
+      - "P2pMPITest.*"
+      - "NetTransportMPITest.*"
+      - "ShmMPITest.*"
+      - "NetIbMPITest.*"
+      - "ImplicitLaunchOrderMPITest.*"
+    exclude_windows:
+      - "*"
+    labels:
+      - "nightly"
+      - "rccl"
+      - "mpi"
+
+execution_settings:
+  timeout_multiplier: 1
+  category_timeouts:
+    # NetIb large / multi-step cases can be slow on real IB
+    nightly_mpi: 1800
