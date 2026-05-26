@@ -5,7 +5,7 @@
 #   quick — smoke (curated patterns, tighter UT_*).
 #   standard — broad (Suite.*, bounded UT_*).
 #   full — same patterns as standard; longer timeouts; wider UT_* sweeps
-#     (UT_DATATYPES/UT_REDOPS ALL use harness defaults).
+#     (UT_DATATYPES/UT_REDOPS all use harness defaults).
 #   comprehensive_* - forced NCCL_PROTO / NCCL_ALGO.
 #
 # Related:
@@ -197,8 +197,8 @@ test_categories:
       - "UT_MIN_GPUS=1"
       - "UT_MAX_GPUS=8"
       - "UT_POW2_GPUS=0"
-      - "UT_DATATYPES=ALL"
-      - "UT_REDOPS=ALL"
+      - "UT_DATATYPES=all"
+      - "UT_REDOPS=all"
   comprehensive_base:
     description: "Same patterns and harness as full — exhaustive sweeps with auto algorithm/protocol selection (no NCCL_PROTO / NCCL_ALGO)."
     test_patterns: *all_patterns
@@ -222,8 +222,8 @@ test_categories:
       - "UT_MIN_GPUS=1"
       - "UT_MAX_GPUS=8"
       - "UT_POW2_GPUS=1"
-      - "UT_DATATYPES=ALL"
-      - "UT_REDOPS=ALL"
+      - "UT_DATATYPES=all"
+      - "UT_REDOPS=all"
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Ring"
   comprehensive_pow2_tree_simple:
@@ -240,8 +240,8 @@ test_categories:
       - "UT_MIN_GPUS=1"
       - "UT_MAX_GPUS=8"
       - "UT_POW2_GPUS=1"
-      - "UT_DATATYPES=ALL"
-      - "UT_REDOPS=ALL"
+      - "UT_DATATYPES=all"
+      - "UT_REDOPS=all"
       - "NCCL_PROTO=Simple"
       - "NCCL_ALGO=Tree"
   comprehensive_pow2_ring_ll:
@@ -258,8 +258,8 @@ test_categories:
       - "UT_MIN_GPUS=1"
       - "UT_MAX_GPUS=8"
       - "UT_POW2_GPUS=1"
-      - "UT_DATATYPES=ALL"
-      - "UT_REDOPS=ALL"
+      - "UT_DATATYPES=all"
+      - "UT_REDOPS=all"
       - "NCCL_PROTO=LL"
       - "NCCL_ALGO=Ring"
 
