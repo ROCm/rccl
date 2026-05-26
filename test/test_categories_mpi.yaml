@@ -22,7 +22,6 @@ test_categories:
       - "mpi"
     env_variables:
       - "NCCL_DEBUG=INFO"
-
   standard:
     description: "MPI regression — all transport / IB / implicit-launch suites (same patterns as full; lighter env)."
     test_patterns: &mpi_all_patterns
@@ -40,7 +39,6 @@ test_categories:
       - "mpi"
     env_variables:
       - "NCCL_DEBUG=INFO"
-
   full:
     description: "MPI exhaustive — same suites as standard; env enables implicit launch, CE memcpy paths, and verbose rank logs."
     test_patterns: *mpi_all_patterns

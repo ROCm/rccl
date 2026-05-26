@@ -22,7 +22,6 @@ test_categories:
       - "debug"
     env_variables:
       - "NCCL_DEBUG=INFO"
-
   standard:
     <<: *altrsmi_quick
     labels:
@@ -31,7 +30,6 @@ test_categories:
       - "regression"
       - "altrsmi"
       - "debug"
-
   full:
     <<: *altrsmi_quick
     labels:

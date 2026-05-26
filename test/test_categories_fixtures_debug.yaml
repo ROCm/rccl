@@ -34,7 +34,6 @@ test_categories:
       - "NCCL_DEBUG=INFO"
       - "RCCL_TEST_NETSOCKET_MAX_ATTEMPTS=200"
       - "RCCL_TEST_NETSOCKET_SLEEP_MS=100"
-
   standard:
     <<: *fixtures_debug_quick
     description: "Same patterns and env as quick; standard labels."
@@ -44,7 +43,6 @@ test_categories:
       - "regression"
       - "fixtures"
       - "debug"
-
   full:
     <<: *fixtures_debug_quick
     description: "Same patterns and env as quick; full labels."

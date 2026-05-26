@@ -35,7 +35,6 @@ test_categories:
       - "fixtures"
     env_variables: &fixtures_env
       - "NCCL_DEBUG=INFO"
-
   standard: &fixtures_standard
     description: "Broad regression — every suite in this binary (wildcard per suite), bounded timeouts."
     test_patterns:
@@ -62,7 +61,6 @@ test_categories:
       - "regression"
       - "fixtures"
     env_variables: *fixtures_env
-
   full:
     <<: *fixtures_standard
     labels:
