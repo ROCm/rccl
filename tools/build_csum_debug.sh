@@ -25,7 +25,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${REPO_ROOT}/build"
+BUILD_DIR="${REPO_ROOT}/build/release"
 
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
@@ -41,6 +41,6 @@ CXX=/opt/rocm/bin/hipcc cmake \
   -DENABLE_IB_NET_CHECKSUM=ON \
   -DCMAKE_BUILD_TYPE=Debug \
   -DTRACE=1 \
-  ..
+  ../..
 
 make -j

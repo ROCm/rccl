@@ -508,6 +508,7 @@ struct ncclComm {
   int gfx9BarrierMode; // RCCL: ncclGfx9BarrierFenceMode for ProtoSimple barrier()
 #if RCCL_IB_CHECKSUM_DEVICE_ENABLED
   int netChecksumEnabled; // RCCL: 1 iff IB or socket transport CSUM is on (gates kernel-side XOR)
+  int netChecksumBytes;   // RCCL: per-step byte-count cap for kernel XOR (0 = no limit, mirrors RCCL_IB_RDMA_CHECKSUM_BYTES)
 #endif
   int localRank;
   int localRanks;

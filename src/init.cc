@@ -802,9 +802,19 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   {
     extern int64_t rcclParamIbRdmaChecksum();
     extern int64_t rcclParamSocketChecksum();
+    extern int64_t rcclParamIbRdmaChecksumBytes();
     int const nce = (rcclParamIbRdmaChecksum() != 0 || rcclParamSocketChecksum() != 0) ? 1 : 0;
     comm->netChecksumEnabled = nce;
     tmpCommAndChans.comm.netChecksumEnabled = nce;
+    // Clamp to non-negative int so the kernel side can compare against the
+    // 32-bit slot size without sign-extension surprises. 0 keeps current
+    // behaviour (no cap, full-slot XOR). A positive value caps the per-step
+    // XOR work to the first N bytes of every slot; oversize slots still get
+    // a real checksum but only over their first N bytes (see prims_simple.h).
+    int64_t const limit = rcclParamIbRdmaChecksumBytes();
+    int const ncb = (limit <= 0) ? 0 : (limit > 0x7fffffffLL ? 0x7fffffff : (int)limit);
+    comm->netChecksumBytes = ncb;
+    tmpCommAndChans.comm.netChecksumBytes = ncb;
   }
 #endif
   for (int p=0; p < NCCL_NUM_PROTOCOLS; p++) {
@@ -850,6 +860,12 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 #if RCCL_IB_CHECKSUM_DEVICE_ENABLED
     INFO(NCCL_INIT, "Kernel net checksum: %s (gates kernel XOR; per-transport verify still honors its own env)",
          comm->netChecksumEnabled ? "On" : "Off");
+    if (comm->netChecksumBytes > 0) {
+      INFO(NCCL_INIT, "Kernel net checksum byte cap: %d (RCCL_IB_RDMA_CHECKSUM_BYTES; XOR covers first min(slot_size, cap) bytes)",
+           comm->netChecksumBytes);
+    } else {
+      INFO(NCCL_INIT, "Kernel net checksum byte cap: unlimited (RCCL_IB_RDMA_CHECKSUM_BYTES=0; full-slot XOR)");
+    }
 #endif
   }
 

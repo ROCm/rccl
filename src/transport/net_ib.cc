@@ -135,6 +135,15 @@ RCCL_PARAM(IbQpsPerP2p, "IB_QPS_PER_P2P", 0);
 #if RCCL_IB_CHECKSUM_DEVICE_ENABLED
 RCCL_PARAM(IbRdmaChecksum, "IB_RDMA_CHECKSUM", 1);
 RCCL_PARAM(IbRdmaChecksumTrace, "IB_RDMA_CHECKSUM_TRACE", 0);
+// Per-step byte budget for the kernel XOR. 0 (default) means "no cap" --
+// every eligible slot is XORed in full. A positive N caps the *work*: when
+// a slot's payload exceeds N bytes the kernel still publishes a real
+// checksum, but the XOR (and the matching receiver verify) only cover the
+// first N bytes of the slot. The IMM continues to carry the real slot
+// size, so progress and #wrong accounting are unaffected. Used to trade
+// detection coverage on the tail of large messages for a bounded per-step
+// XOR latency.
+RCCL_PARAM(IbRdmaChecksumBytes, "IB_RDMA_CHECKSUM_BYTES", 0);
 #endif
 
 static ncclResult_t ncclIbStatsInit(struct ncclIbStats* stat) {

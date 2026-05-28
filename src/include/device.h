@@ -713,6 +713,13 @@ struct ncclDevComm {
   // checks it. Set once on the host at comm init from the two
   // RCCL_PARAM env vars.
   int netChecksumEnabled;
+  // Per-step byte-count cap for the kernel XOR (mirrors
+  // RCCL_IB_RDMA_CHECKSUM_BYTES). 0 means "no limit"; positive N causes
+  // the kernel send sites to skip XOR (and publish NCCL_IB_CHECKSUM_NONE
+  // into connFifo[slot].checksum) for any slot whose .size exceeds N.
+  // Lets users trade verification coverage for per-step latency on large
+  // messages without rebuilding.
+  int netChecksumBytes;
 #endif
 
   int* collNetDenseToUserRank;

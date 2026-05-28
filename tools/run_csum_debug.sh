@@ -37,7 +37,7 @@ else
   LOG_PATH="${HOME}/ar_op_${next}.log"
 fi
 
-: "${NCCL_DEBUG:=WARN}"
+: "${NCCL_DEBUG:=VERSION}"
 : "${NCCL_DEBUG_SUBSYS:=NET}"
 : "${NCCL_IB_HCA:=mlx5_0,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_7,mlx5_8,mlx5_9}"
 : "${NCCL_IB_TC:=41}"
@@ -52,7 +52,7 @@ MPI_BIN_DIR="${HOME}/mpich/install/bin"
 
 MPIRUN_ENV=(
   -env PATH="${MPI_BIN_DIR}:${PATH}"
-  -env LD_LIBRARY_PATH="${HOME}/rccl/build:${MPI_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+  -env LD_LIBRARY_PATH="${HOME}/rccl/build/release:${MPI_LIB_DIR}:${LD_LIBRARY_PATH:-}"
   -env NCCL_DEBUG="${NCCL_DEBUG}"
   -env NCCL_DEBUG_SUBSYS="${NCCL_DEBUG_SUBSYS}"
   -env NCCL_IB_HCA="${NCCL_IB_HCA}"
@@ -69,7 +69,7 @@ echo "[run_csum_debug] LOG_PATH=${LOG_PATH}"
 MPIRUN_BIN="${MPIRUN_BIN:-${HOME}/mpich/install/bin/mpirun}"
 
 "${MPIRUN_BIN}" -np 16 \
-  --hosts useocpm2m-097-026:8,useocpm2m-097-032:8 \
+  --hosts useocpm2m-097-042:8,useocpm2m-097-043:8 \
   --bind-to numa \
   "${MPIRUN_ENV[@]}" \
   "${HOME}/rocm-systems/projects/rccl-tests/build/all_reduce_perf" \
