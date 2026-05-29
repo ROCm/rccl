@@ -37,6 +37,39 @@ else
   LOG_PATH="${HOME}/ar_op_${next}.log"
 fi
 
+# Derive HOSTS / NP from SLURM env when available (sbatch/salloc/srun), so the
+# script "just works" inside a SLURM allocation without editing the host list.
+# Explicit HOSTS / NP env (or values inherited from the caller) always win.
+#   HOSTS  : --hosts arg for mpirun ("host1:N,host2:N,...")
+#   NP     : -np arg for mpirun (total ranks = sum of the :N in HOSTS)
+# SLURM mapping:
+#   nodelist  <- SLURM_JOB_NODELIST | SLURM_NODELIST, expanded via `scontrol`
+#   per_node  <- SLURM_GPUS_ON_NODE | SLURM_GPUS_PER_NODE | SLURM_NTASKS_PER_NODE | 8
+if [[ -z "${HOSTS:-}" ]]; then
+  _nodelist="${SLURM_JOB_NODELIST:-${SLURM_NODELIST:-}}"
+  if [[ -n "${_nodelist}" ]] && command -v scontrol >/dev/null 2>&1; then
+    _per_node="${SLURM_GPUS_ON_NODE:-${SLURM_GPUS_PER_NODE:-${SLURM_NTASKS_PER_NODE:-8}}}"
+    HOSTS=$(scontrol show hostname "${_nodelist}" | sed "s/$/:${_per_node}/" | paste -sd, -)
+  fi
+fi
+: "${HOSTS:=useocpm2m-097-026:8,useocpm2m-097-032:8}"
+# NP defaults to the total GPU count implied by HOSTS (sum of the :N suffixes).
+# A bare `host` (no :N) contributes 1 by mpirun's convention. Falls back to 16
+# only if HOSTS can't be parsed for any positive count.
+if [[ -z "${NP:-}" ]]; then
+  NP=0
+  IFS=, read -r -a _hostlist <<< "${HOSTS}"
+  for _h in "${_hostlist[@]}"; do
+    _n="${_h##*:}"
+    if [[ "${_h}" == *:* && "${_n}" =~ ^[0-9]+$ ]]; then
+      NP=$(( NP + _n ))
+    else
+      NP=$(( NP + 1 ))
+    fi
+  done
+  (( NP > 0 )) || NP=16
+fi
+
 : "${NCCL_DEBUG:=VERSION}"
 : "${NCCL_DEBUG_SUBSYS:=NET}"
 : "${NCCL_IB_HCA:=mlx5_0,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_7,mlx5_8,mlx5_9}"
@@ -65,11 +98,12 @@ MPIRUN_ENV=(
 )
 
 echo "[run_csum_debug] LOG_PATH=${LOG_PATH}"
+echo "[run_csum_debug] HOSTS=${HOSTS} NP=${NP}"
 
 MPIRUN_BIN="${MPIRUN_BIN:-${HOME}/mpich/install/bin/mpirun}"
 
-"${MPIRUN_BIN}" -np 16 \
-  --hosts useocpm2m-097-042:8,useocpm2m-097-043:8 \
+"${MPIRUN_BIN}" -np "${NP}" \
+  --hosts "${HOSTS}" \
   --bind-to numa \
   "${MPIRUN_ENV[@]}" \
   "${HOME}/rocm-systems/projects/rccl-tests/build/all_reduce_perf" \

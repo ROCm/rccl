@@ -19,8 +19,16 @@
 # Env overrides (any of these is forwarded to mpirun as -env, so they reach
 # every rank; the defaults match tools/run_csum_debug.sh so a stress run uses
 # the same NIC / TC / topology config as the single-shot debug run):
-#   HOSTS=useocpm2m-097-026:8,useocpm2m-097-032:8
-#   NP=16
+#   HOSTS=host1:N,host2:N,...                 # auto-derived from SLURM_NODELIST
+#                                             # (+ SLURM_GPUS_ON_NODE /
+#                                             # SLURM_NTASKS_PER_NODE) inside an
+#                                             # sbatch/salloc/srun allocation;
+#                                             # falls back to the historical
+#                                             # useocpm2m-097-026:8,032:8 pair
+#                                             # when SLURM env is absent.
+#   NP=16                                     # defaults to sum of :N suffixes
+#                                             # in HOSTS (total GPUs across all
+#                                             # nodes), or 16 if HOSTS has none.
 #   DTYPE=bfloat16                            # rccl-tests -d
 #   MIN_BYTES=8                               # rccl-tests -b
 #   MAX_BYTES=1G                              # rccl-tests -e
@@ -81,8 +89,35 @@ fi
 mkdir -p "${LOG_DIR}"
 
 # ---- defaults (overridable via env) ----------------------------------------
-: "${HOSTS:=useocpm2m-097-042:8,useocpm2m-097-043}"
-: "${NP:=16}"
+# Derive HOSTS / NP from SLURM env when available (sbatch/salloc/srun); explicit
+# HOSTS / NP env (or values inherited from the caller) still win.
+#   nodelist  <- SLURM_JOB_NODELIST | SLURM_NODELIST, expanded via `scontrol`
+#   per_node  <- SLURM_GPUS_ON_NODE | SLURM_GPUS_PER_NODE | SLURM_NTASKS_PER_NODE | 8
+#   NP        = sum of the :N suffixes in HOSTS (i.e. total GPUs across nodes)
+if [[ -z "${HOSTS:-}" ]]; then
+  _nodelist="${SLURM_JOB_NODELIST:-${SLURM_NODELIST:-}}"
+  if [[ -n "${_nodelist}" ]] && command -v scontrol >/dev/null 2>&1; then
+    _per_node="${SLURM_GPUS_ON_NODE:-${SLURM_GPUS_PER_NODE:-${SLURM_NTASKS_PER_NODE:-8}}}"
+    HOSTS=$(scontrol show hostname "${_nodelist}" | sed "s/$/:${_per_node}/" | paste -sd, -)
+  fi
+fi
+: "${HOSTS:=useocpm2m-097-026:8,useocpm2m-097-032:8}"
+# NP defaults to total GPU count implied by HOSTS (sum of :N suffixes).
+# A bare `host` (no :N) contributes 1 by mpirun's convention. Falls back to 16
+# only if HOSTS can't be parsed for any positive count.
+if [[ -z "${NP:-}" ]]; then
+  NP=0
+  IFS=, read -r -a _hostlist <<< "${HOSTS}"
+  for _h in "${_hostlist[@]}"; do
+    _n="${_h##*:}"
+    if [[ "${_h}" == *:* && "${_n}" =~ ^[0-9]+$ ]]; then
+      NP=$(( NP + _n ))
+    else
+      NP=$(( NP + 1 ))
+    fi
+  done
+  (( NP > 0 )) || NP=16
+fi
 : "${DTYPE:=bfloat16}"
 : "${MIN_BYTES:=8}"
 : "${MAX_BYTES:=1G}"
