@@ -257,10 +257,11 @@ private:
         int       bytes = __shfl(myXorBytes, srcLane);
         int       doCsum = __shfl(myDoCsum, srcLane);
         uint32_t  expected = (uint32_t)__shfl((int)myExpected, srcLane);
-        uint32_t got = ncclQuickXorCsumWarp(
+        uint32_t got = ncclQuickXorCsumWarpIters(
             lane,
             doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
-            doCsum ? (size_t)bytes : 0);
+            doCsum ? (size_t)bytes : 0,
+            ncclShmem.comm.netChecksumRecvIters);
         if (lane == srcLane && doCsum) {
           uint32_t expectedCsum = (expected >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
           uint32_t gotCsum = ncclQuickXorCsumFold12(got);
@@ -834,10 +835,11 @@ public:
             int       rbytes = __shfl(rXorBytes, rsrcLane);
             int       rdo    = __shfl(rDoCsum,  rsrcLane);
             uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
-            uint32_t rgot = ncclQuickXorCsumWarp(
+            uint32_t rgot = ncclQuickXorCsumWarpIters(
                 rlane,
                 rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
-                rdo ? (size_t)rbytes : 0);
+                rdo ? (size_t)rbytes : 0,
+                ncclShmem.comm.netChecksumRecvIters);
             if (rlane == rsrcLane && rdo) {
               uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
               uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
@@ -1575,10 +1577,11 @@ public:
           int       rbytes = __shfl(rXorBytes, rsrcLane);
           int       rdo    = __shfl(rDoCsum,  rsrcLane);
           uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
-          uint32_t rgot = ncclQuickXorCsumWarp(
+          uint32_t rgot = ncclQuickXorCsumWarpIters(
               rlane,
               rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
-              rdo ? (size_t)rbytes : 0);
+              rdo ? (size_t)rbytes : 0,
+              ncclShmem.comm.netChecksumRecvIters);
           if (rlane == rsrcLane && rdo) {
             uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
             uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
@@ -1754,10 +1757,11 @@ public:
           int       rbytes = __shfl(rXorBytes, rsrcLane);
           int       rdo    = __shfl(rDoCsum,  rsrcLane);
           uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
-          uint32_t rgot = ncclQuickXorCsumWarp(
+          uint32_t rgot = ncclQuickXorCsumWarpIters(
               rlane,
               rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
-              rdo ? (size_t)rbytes : 0);
+              rdo ? (size_t)rbytes : 0,
+              ncclShmem.comm.netChecksumRecvIters);
           if (rlane == rsrcLane && rdo) {
             uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
             uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);

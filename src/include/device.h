@@ -208,13 +208,32 @@ __device__ inline uint32_t ncclQuickXorCsum(const void* ptr, size_t bytes) {
 // Byte-order and tail handling intentionally mirror `ncclQuickXorCsum` so
 // the kernel-side, IB-proxy-side, and socket-recv-side computations all
 // agree on the wire value.
-__device__ inline uint32_t ncclQuickXorCsumWarp(int lane, const void* ptr, size_t bytes) {
+//
+// Both the 4-byte word reads and the trailing 1..3-byte reads go through
+// `__builtin_nontemporal_load`. On AMD CDNA this lowers to
+// `global_load_dword ... slc:1`, which bypasses L1/L2 and goes to HBM.
+// Matches the load intrinsic the actual data-movement kernels use (see
+// op128.h), so the XOR observes the exact same byte stream the compute
+// path sees, even when the proxy bumped the tail only microseconds
+// before the receiver kernel woke up.
+//
+// Marked `__attribute__((noinline))` deliberately: this function is
+// called from 8 sites in prims_simple.h (4 send-compute + 4 recv-verify)
+// and from inside the multi-pass iter loop, all from hot collective
+// kernels. Inlining would replicate the per-word loop, the tail-byte
+// fold, and the WARP_SIZE/2 butterfly reduction at every callsite,
+// inflating both VGPR live-range and i-cache footprint. A single
+// out-of-line copy keeps occupancy stable on the same kernels we're
+// trying to validate, and the matters most for the multi-pass loop
+// (`ncclQuickXorCsumWarpIters`) where unrolling N copies of the body
+// would defeat the `#pragma unroll 1` we use there to save registers.
+__device__ __attribute__((noinline)) inline uint32_t ncclQuickXorCsumWarp(int lane, const void* ptr, size_t bytes) {
   uint32_t csum = 0;
   if (ptr != nullptr && bytes > 0) {
     const uint32_t* w = (const uint32_t*)ptr;
     size_t nwords = bytes >> 2;
     for (size_t i = (size_t)lane; i < nwords; i += WARP_SIZE) {
-      csum ^= w[i];
+      csum ^= __builtin_nontemporal_load(w + i);
     }
     // Lane 0 folds the 0..3 trailing bytes (if any) with the same
     // little-endian packing the scalar version uses.
@@ -223,7 +242,8 @@ __device__ inline uint32_t ncclQuickXorCsumWarp(int lane, const void* ptr, size_
       if (aligned < bytes) {
         const uint8_t* b = (const uint8_t*)ptr;
         uint32_t tail = 0;
-        for (size_t j = 0; j < bytes - aligned; j++) tail |= ((uint32_t)b[aligned + j]) << (8 * j);
+        for (size_t j = 0; j < bytes - aligned; j++)
+          tail |= ((uint32_t)__builtin_nontemporal_load(b + aligned + j)) << (8 * j);
         csum ^= tail;
       }
     }
@@ -232,6 +252,38 @@ __device__ inline uint32_t ncclQuickXorCsumWarp(int lane, const void* ptr, size_
   #pragma unroll
   for (int offset = WARP_SIZE/2; offset > 0; offset >>= 1) {
     csum ^= __shfl_xor(csum, offset);
+  }
+  return csum;
+}
+
+// Iter-aware variant used by the receive-side verify in prims_simple.h.
+// Runs `iters` independent full-warp XOR passes over the same buffer and
+// returns the LAST pass's result. The caller then compares it against the
+// wire checksum: if the buffer is stable across all passes, the last
+// pass equals every prior pass (and the wire value) -> match; if a late
+// write mutated the buffer at any point during the passes, the last pass
+// disagrees with the wire value -> mismatch flagged.
+//
+// `__threadfence_system()` after the first iteration drains any in-flight
+// system-scope writes (e.g. late-arriving DMA from the IB HCA, peer-GPU
+// nontemporal stores) so passes 2..N can observe values that the first
+// pass missed. A single fence is enough: once iteration 2 has seen the
+// post-fence world, iterations 3..N reading the same address get the
+// same byte stream (modulo further mutations, which are exactly what we
+// want to surface).
+//
+// `iters` is clamped to [1, 4] by the host plumbing. The loop is
+// explicitly marked `#pragma unroll 1` so the compiler keeps a single
+// shared body and a small live-range; unrolling 4 copies would balloon
+// VGPR usage by carrying 4 parallel `csum` chains and 4 parallel butterfly
+// reductions, hurting occupancy on the same kernels we're trying to
+// validate.
+__device__ inline uint32_t ncclQuickXorCsumWarpIters(int lane, const void* ptr, size_t bytes, int iters) {
+  uint32_t csum = ncclQuickXorCsumWarp(lane, ptr, bytes);
+  #pragma unroll 1
+  for (int i = 1; i < iters; i++) {
+    if (i == 1) __threadfence_system();
+    csum = ncclQuickXorCsumWarp(lane, ptr, bytes);
   }
   return csum;
 }
@@ -720,6 +772,16 @@ struct ncclDevComm {
   // Lets users trade verification coverage for per-step latency on large
   // messages without rebuilding.
   int netChecksumBytes;
+  // Receive-side verify iteration count (mirrors RCCL_IB_RDMA_CHECKSUM_ITERS,
+  // clamped to [1, 4]). 1 = current behaviour (single pass). >1 re-runs
+  // the per-warp XOR that many times with a `__threadfence_system()`
+  // between iters 1 and 2; the last pass's result is compared against
+  // the wire checksum so any late-arriving buffer mutation surfaces as
+  // a mismatch even if the very first pass saw "good" bytes. Only the
+  // recv verify is iterated; the send-compute side is always 1 pass
+  // because its output IS the wire value (re-XORing would have to agree
+  // with itself trivially).
+  int netChecksumRecvIters;
 #endif
 
   int* collNetDenseToUserRank;

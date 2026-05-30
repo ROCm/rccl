@@ -803,6 +803,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     extern int64_t rcclParamIbRdmaChecksum();
     extern int64_t rcclParamSocketChecksum();
     extern int64_t rcclParamIbRdmaChecksumBytes();
+    extern int64_t rcclParamIbRdmaChecksumIters();
     int const nce = (rcclParamIbRdmaChecksum() != 0 || rcclParamSocketChecksum() != 0) ? 1 : 0;
     comm->netChecksumEnabled = nce;
     tmpCommAndChans.comm.netChecksumEnabled = nce;
@@ -815,6 +816,16 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     int const ncb = (limit <= 0) ? 0 : (limit > 0x7fffffffLL ? 0x7fffffff : (int)limit);
     comm->netChecksumBytes = ncb;
     tmpCommAndChans.comm.netChecksumBytes = ncb;
+    // Clamp recv-verify iteration count to [1, 4]. Library default is 2
+    // (one extra pass after a __threadfence_system() to surface
+    // late-arriving buffer mutations). 1 disables the second pass.
+    // Above 4 the cost outweighs the detection window; the kernel reads
+    // this value uniformly across all lanes so the loop has no per-lane
+    // divergence overhead.
+    int64_t const iters = rcclParamIbRdmaChecksumIters();
+    int nci = (iters <= 1) ? 1 : (iters >= 4 ? 4 : (int)iters);
+    comm->netChecksumRecvIters = nci;
+    tmpCommAndChans.comm.netChecksumRecvIters = nci;
   }
 #endif
   for (int p=0; p < NCCL_NUM_PROTOCOLS; p++) {
@@ -865,6 +876,25 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
            comm->netChecksumBytes);
     } else {
       INFO(NCCL_INIT, "Kernel net checksum byte cap: unlimited (RCCL_IB_RDMA_CHECKSUM_BYTES=0; full-slot XOR)");
+    }
+    INFO(NCCL_INIT, "Kernel net checksum recv iters: %d (RCCL_IB_RDMA_CHECKSUM_ITERS, default 2; %s)",
+         comm->netChecksumRecvIters,
+         comm->netChecksumRecvIters > 1
+           ? "multi-pass with threadfence_system between iter 1 and iter 2 to catch late buffer mutations"
+           : "single pass, no late-mutation detection");
+    // Print one INIT line for the send-side post-completion verify so users
+    // can confirm the feature is wired up just by enabling NCCL_DEBUG=INFO.
+    // Per-step "send csum verify OK" trace lines are gated behind
+    // RCCL_IB_RDMA_CHECKSUM_TRACE=1 (they are HOT-path, one per IB send
+    // completion); mismatches always emit at WARN level regardless of the
+    // trace gate, so a silent log on a healthy run is the expected steady
+    // state. Mention both knobs in the INIT line to short-circuit "why
+    // can't I see verify lines?" questions.
+    {
+      extern int64_t rcclParamIbRdmaChecksumSendVerify();
+      int64_t const sv = rcclParamIbRdmaChecksumSendVerify();
+      INFO(NCCL_INIT, "IB send-side post-completion CPU verify: %s (RCCL_IB_RDMA_CHECKSUM_SEND_VERIFY=%lld, default 1; mismatches always WARN, per-step OK lines need RCCL_IB_RDMA_CHECKSUM_TRACE=1)",
+           sv ? "On" : "Off", (long long)sv);
     }
 #endif
   }
