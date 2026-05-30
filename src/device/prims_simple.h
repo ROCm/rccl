@@ -326,20 +326,19 @@ private:
       }
     }
 
-    // Advance step before computing the FIFO slot so that
-    // `(step - StepPerSlice) % NCCL_STEPS` matches the slot that waitPeer wrote
-    // in this iteration (waitPeer uses `step % NCCL_STEPS` pre-increment).
-    // This mirrors process()/patReduce()/patCopy(), where the step is bumped
-    // before the slot is derived. Computing the slot before the increment
-    // would point one step behind waitPeer (and underflow to a negative index
-    // on the first slice of a fresh connection, causing OOB read/write into
-    // memory preceding connFifo[]).
-    if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
-      step += StepPerSlice;
-    }
-
 #if RCCL_IB_CHECKSUM_DEVICE_ENABLED
     // Warp-cooperative XOR checksum.
+    //
+    // Placed IMMEDIATELY after the post-peer fence above and BEFORE the
+    // step increment below. The fence is the point at which this slice's
+    // reduceCopy stores into the send staging slot become ordered/visible
+    // (system-scope under __threadfence_system, the strongest mode); we
+    // XOR the buffer right here so the checksum observes exactly the bytes
+    // the fence just published -- i.e. the bytes the proxy/NIC will read
+    // after the upcoming tail store -- with no other memory operations
+    // interleaved between the fence and the read. The step bump below is
+    // pure register arithmetic and intentionally follows the XOR so it
+    // cannot land between the fence and the buffer read.
     //
     // The RolePostSend lane has the slot/size/ptr; we publish them via
     // __shfl to the rest of its warp so all WARP_SIZE lanes can XOR the
@@ -350,7 +349,10 @@ private:
     //
     // Inputs come from the early (pre-fence) snapshot above so the next
     // iteration's waitPeer cannot race-overwrite the shared-memory dsts
-    // we XOR over.
+    // we XOR over. The published slot (postSnapSlot = pre-increment
+    // step % NCCL_STEPS) equals the slot the recv side derives from its
+    // post-increment `(step - StepPerSlice) % NCCL_STEPS`, so publishing
+    // here (before the bump) targets the correct connFifo entry.
     //
     // Must run before the upcoming fence_acq_rel_sys() store and the
     // STORE(connStepPtr, step) tail update so the proxy sees the new
@@ -388,6 +390,18 @@ private:
       }
     }
 #endif
+
+    // Advance step before computing the FIFO slot so that
+    // `(step - StepPerSlice) % NCCL_STEPS` matches the slot that waitPeer wrote
+    // in this iteration (waitPeer uses `step % NCCL_STEPS` pre-increment).
+    // This mirrors process()/patReduce()/patCopy(), where the step is bumped
+    // before the slot is derived. Computing the slot before the increment
+    // would point one step behind waitPeer (and underflow to a negative index
+    // on the first slice of a fresh connection, causing OOB read/write into
+    // memory preceding connFifo[]).
+    if (flags & (Recv*RolePostRecv | Send*RolePostSend)) {
+      step += StepPerSlice;
+    }
 
     if ((flags & Send*RolePostSend) && next_hdp_reg)
       STORE((unsigned int *)next_hdp_reg, 0x1);
