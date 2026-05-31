@@ -19,13 +19,16 @@
 # Env overrides (any of these is forwarded to mpirun as -env, so they reach
 # every rank; the defaults match tools/run_csum_debug.sh so a stress run uses
 # the same NIC / TC / topology config as the single-shot debug run):
-#   HOSTS=host1:N,host2:N,...                 # auto-derived from SLURM_NODELIST
-#                                             # (+ SLURM_GPUS_ON_NODE /
-#                                             # SLURM_NTASKS_PER_NODE) inside an
-#                                             # sbatch/salloc/srun allocation;
-#                                             # falls back to the historical
-#                                             # useocpm2m-097-026:8,032:8 pair
-#                                             # when SLURM env is absent.
+#   HOSTS=host1:N,host2:N,...                 # node list. Auto-derived from the
+#                                             # SLURM allocation nodelist (each
+#                                             # node suffixed :GPUS_PER_NODE)
+#                                             # when inside sbatch/salloc/srun;
+#                                             # falls back to the hard-coded
+#                                             # useocpm2m-097-050:8,137:8 pair.
+#                                             # An explicit HOSTS env always wins.
+#   GPUS_PER_NODE=8                           # :N suffix for SLURM-derived hosts
+#                                             # (SLURM_GPUS_ON_NODE/.._PER_NODE/
+#                                             # NTASKS_PER_NODE, else 8)
 #   NP=16                                     # defaults to sum of :N suffixes
 #                                             # in HOSTS (total GPUs across all
 #                                             # nodes), or 16 if HOSTS has none.
@@ -89,19 +92,29 @@ fi
 mkdir -p "${LOG_DIR}"
 
 # ---- defaults (overridable via env) ----------------------------------------
-# Derive HOSTS / NP from SLURM env when available (sbatch/salloc/srun); explicit
-# HOSTS / NP env (or values inherited from the caller) still win.
-#   nodelist  <- SLURM_JOB_NODELIST | SLURM_NODELIST, expanded via `scontrol`
-#   per_node  <- SLURM_GPUS_ON_NODE | SLURM_GPUS_PER_NODE | SLURM_NTASKS_PER_NODE | 8
-#   NP        = sum of the :N suffixes in HOSTS (i.e. total GPUs across nodes)
+# Host list / NP discovery (an explicit HOSTS env always wins):
+#   1. inside a SLURM allocation, expand the allocated nodelist
+#      (SLURM_JOB_NODELIST | SLURM_NODELIST via `scontrol show hostnames`) and
+#      suffix each node with :GPUS_PER_NODE so HOSTS spans every alloc node.
+#   2. otherwise fall back to the hard-coded useocpm2m-097-050/137 pair.
+#   NP = sum of the :N suffixes in HOSTS (i.e. total GPUs across nodes)
+# GPUS_PER_NODE prefers SLURM_GPUS_ON_NODE / SLURM_GPUS_PER_NODE /
+# SLURM_NTASKS_PER_NODE when set, else 8.
+: "${GPUS_PER_NODE:=${SLURM_GPUS_ON_NODE:-${SLURM_GPUS_PER_NODE:-${SLURM_NTASKS_PER_NODE:-8}}}}"
 if [[ -z "${HOSTS:-}" ]]; then
   _nodelist="${SLURM_JOB_NODELIST:-${SLURM_NODELIST:-}}"
+  # A shell that only inherited SLURM_JOB_ID (e.g. a Cursor/agent terminal that
+  # is not itself a SLURM task) won't have SLURM_*_NODELIST; recover the alloc
+  # nodelist from the job id instead.
+  if [[ -z "${_nodelist}" && -n "${SLURM_JOB_ID:-}" ]] && command -v squeue >/dev/null 2>&1; then
+    _nodelist=$(squeue -h -j "${SLURM_JOB_ID}" -o '%N' 2>/dev/null)
+  fi
   if [[ -n "${_nodelist}" ]] && command -v scontrol >/dev/null 2>&1; then
-    _per_node="${SLURM_GPUS_ON_NODE:-${SLURM_GPUS_PER_NODE:-${SLURM_NTASKS_PER_NODE:-8}}}"
-    HOSTS=$(scontrol show hostname "${_nodelist}" | sed "s/$/:${_per_node}/" | paste -sd, -)
+    HOSTS=$(scontrol show hostnames "${_nodelist}" \
+            | sed "s/\$/:${GPUS_PER_NODE}/" | paste -sd, -)
   fi
 fi
-: "${HOSTS:=useocpm2m-097-026:8,useocpm2m-097-032:8}"
+: "${HOSTS:=useocpm2m-097-050:8,useocpm2m-097-137:8}"
 # NP defaults to total GPU count implied by HOSTS (sum of :N suffixes).
 # A bare `host` (no :N) contributes 1 by mpirun's convention. Falls back to 16
 # only if HOSTS can't be parsed for any positive count.
@@ -129,6 +142,33 @@ fi
 : "${RCCL_BUILD_DIR:=${HOME}/rccl/build/release}"
 : "${MPIRUN_BIN:=${HOME}/mpich/install/bin/mpirun}"
 
+# ---- launcher selection (srun inside a SLURM allocation, else mpirun) -------
+# mpich's mpirun launches the remote --hosts ranks over ssh, which only works
+# from a shell with a working, TTY-backed ssh. Inside an interactive allocation
+# shell that holds, but from a non-interactive / no-TTY context (e.g. a
+# Cursor/agent terminal) the launcher ssh to the remote node stalls after the
+# session opens and wedges the whole run. When we're inside a SLURM allocation
+# we launch with srun (--mpi=pmi2) instead: it goes through slurmd/PMI and needs
+# no ssh or controlling TTY, so it works from any shell.
+#   LAUNCHER=auto    (default) srun if SLURM_JOB_ID is set, else mpirun
+#   LAUNCHER=srun    force srun
+#   LAUNCHER=mpirun  force mpirun (ssh launch)
+#   SRUN_BIN=srun / SRUN_MPI=pmi2  (override the srun binary / PMI plugin)
+: "${LAUNCHER:=auto}"
+: "${SRUN_BIN:=srun}"
+: "${SRUN_MPI:=pmi2}"
+if [[ "${LAUNCHER}" == "auto" ]]; then
+  if [[ -n "${SLURM_JOB_ID:-}" ]]; then LAUNCHER=srun; else LAUNCHER=mpirun; fi
+fi
+# Nodes / tasks-per-node implied by HOSTS: each comma-separated entry is a node,
+# and NP/NNODES ranks land on each (srun --ntasks-per-node). Falls back to a
+# single node x NP tasks if NP isn't evenly divisible by the node count.
+NNODES=0
+IFS=, read -r -a _hl <<< "${HOSTS}"
+for _h in "${_hl[@]}"; do [[ -n "${_h}" ]] && NNODES=$(( NNODES + 1 )); done
+(( NNODES > 0 )) || NNODES=1
+if (( NP % NNODES == 0 )); then PPN=$(( NP / NNODES )); else NNODES=1; PPN="${NP}"; fi
+
 : "${NCCL_DEBUG:=VERSION}"
 : "${NCCL_DEBUG_SUBSYS:=INIT}"
 : "${NCCL_IB_HCA:=mlx5_0,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_7,mlx5_8,mlx5_9}"
@@ -150,19 +190,24 @@ fi
 MPI_LIB_DIR="${HOME}/mpich/install/lib"
 MPI_BIN_DIR="${HOME}/mpich/install/bin"
 
-MPIRUN_ENV=(
-  -env PATH="${MPI_BIN_DIR}:${PATH}"
-  -env LD_LIBRARY_PATH="${RCCL_BUILD_DIR}:${MPI_LIB_DIR}:${LD_LIBRARY_PATH:-}"
-  -env NCCL_DEBUG="${NCCL_DEBUG}"
-  -env NCCL_DEBUG_SUBSYS="${NCCL_DEBUG_SUBSYS}"
-  -env NCCL_IB_HCA="${NCCL_IB_HCA}"
-  -env NCCL_IB_TC="${NCCL_IB_TC}"
-  -env NCCL_IGNORE_CPU_AFFINITY="${NCCL_IGNORE_CPU_AFFINITY}"
-  -env HSA_NO_SCRATCH_RECLAIM="${HSA_NO_SCRATCH_RECLAIM}"
-  -env RCCL_IB_RDMA_CHECKSUM="${RCCL_IB_RDMA_CHECKSUM}"
-  -env RCCL_IB_RDMA_CHECKSUM_BYTES="${RCCL_IB_RDMA_CHECKSUM_BYTES}"
-  -env RCCL_IB_RDMA_CHECKSUM_TRACE="${RCCL_IB_RDMA_CHECKSUM_TRACE}"
+# Single source of truth for the per-rank environment as NAME=VALUE strings.
+# mpirun forwards these via -env pairs; srun gets them prefixed via `env ...`
+# and propagates them to every task (srun's default --export=ALL).
+ENV_KV=(
+  "PATH=${MPI_BIN_DIR}:${PATH}"
+  "LD_LIBRARY_PATH=${RCCL_BUILD_DIR}:${MPI_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+  "NCCL_DEBUG=${NCCL_DEBUG}"
+  "NCCL_DEBUG_SUBSYS=${NCCL_DEBUG_SUBSYS}"
+  "NCCL_IB_HCA=${NCCL_IB_HCA}"
+  "NCCL_IB_TC=${NCCL_IB_TC}"
+  "NCCL_IGNORE_CPU_AFFINITY=${NCCL_IGNORE_CPU_AFFINITY}"
+  "HSA_NO_SCRATCH_RECLAIM=${HSA_NO_SCRATCH_RECLAIM}"
+  "RCCL_IB_RDMA_CHECKSUM=${RCCL_IB_RDMA_CHECKSUM}"
+  "RCCL_IB_RDMA_CHECKSUM_BYTES=${RCCL_IB_RDMA_CHECKSUM_BYTES}"
+  "RCCL_IB_RDMA_CHECKSUM_TRACE=${RCCL_IB_RDMA_CHECKSUM_TRACE}"
 )
+MPIRUN_ENV=()
+for _kv in "${ENV_KV[@]}"; do MPIRUN_ENV+=( -env "${_kv%%=*}" "${_kv#*=}" ); done
 
 # ---- collective list --------------------------------------------------------
 # Default: every *_perf binary in the rccl-tests build dir. The user can pass
@@ -199,6 +244,11 @@ SUMMARY="${LOG_DIR}/SUMMARY.txt"
 {
   echo "# run_csum_stress @ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "# log_dir         : ${LOG_DIR}"
+  if [[ "${LAUNCHER}" == "srun" ]]; then
+    echo "# launcher        : srun (--mpi=${SRUN_MPI})  jobid=${SLURM_JOB_ID:-<none>}  nodes=${NNODES} ppn=${PPN}"
+  else
+    echo "# launcher        : mpirun (ssh)  hosts=${HOSTS}"
+  fi
   echo "# hosts           : ${HOSTS}  (np=${NP})"
   echo "# rccl_build_dir  : ${RCCL_BUILD_DIR}"
   echo "# rccl_tests_bin  : ${RCCL_TESTS_BIN_DIR}"
@@ -222,17 +272,39 @@ for col in "${COLLECTIVES[@]}"; do
     continue
   fi
   echo "[run_csum_stress] === ${col} ===" >&2
+  if [[ "${LAUNCHER}" == "srun" ]]; then
+    cmd=(
+      env "${ENV_KV[@]}"
+      "${SRUN_BIN}"
+        ${SLURM_JOB_ID:+--jobid=${SLURM_JOB_ID}} --overlap
+        --ntasks="${NP}" --ntasks-per-node="${PPN}"
+        --mpi="${SRUN_MPI}" --cpu-bind=none
+        "${bin}"
+          -b "${MIN_BYTES}" -e "${MAX_BYTES}" -f "${STEP_FACTOR}"
+          -g "${GPUS_PER_THREAD}" -d "${DTYPE}"
+          -w "${WARMUP}" -n "${ITERS}"
+          -c 1
+    )
+  else
+    cmd=(
+      "${MPIRUN_BIN}" -np "${NP}"
+      --hosts "${HOSTS}"
+      --bind-to numa
+      "${MPIRUN_ENV[@]}"
+      "${bin}"
+        -b "${MIN_BYTES}" -e "${MAX_BYTES}" -f "${STEP_FACTOR}"
+        -g "${GPUS_PER_THREAD}" -d "${DTYPE}"
+        -w "${WARMUP}" -n "${ITERS}"
+        -c 1
+    )
+  fi
+  # Record the full, copy-pasteable launch command at the top of the log
+  # (printf %q quotes each token so env values / host lists survive a paste).
+  { printf '# cmd:'; printf ' %q' "${cmd[@]}"; printf ' </dev/null\n'; } > "${log}"
   set +e
-  "${MPIRUN_BIN}" -np "${NP}" \
-    --hosts "${HOSTS}" \
-    --bind-to numa \
-    "${MPIRUN_ENV[@]}" \
-    "${bin}" \
-      -b "${MIN_BYTES}" -e "${MAX_BYTES}" -f "${STEP_FACTOR}" \
-      -g "${GPUS_PER_THREAD}" -d "${DTYPE}" \
-      -w "${WARMUP}" -n "${ITERS}" \
-      -c 1 \
-    > "${log}" 2>&1
+  # </dev/null: keep the local launcher from blocking on an inherited non-TTY
+  # pipe stdin when run from a non-interactive shell.
+  "${cmd[@]}" >> "${log}" 2>&1 </dev/null
   rc=$?
   set -e
 
