@@ -62,6 +62,10 @@ hipify:
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/plugin/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/latency_profiler/*.h
 	hipify-perl -inplace -quiet-warnings hipify_rccl/src/device/include/*.h
+	# Fix device includes - remove "device/" prefix since files are flattened
+	# into the same directory (needed for device/rccl_ptr.h from PR #3812).
+	sed -i 's|#include "device/|#include "|g' hipify_rccl/src/device/include/*.h
+	sed -i 's|#include "device/|#include "|g' hipify_rccl/include/*.h
 	bash ../../cmake/scripts/add_unroll.sh "hipify_rccl/src/device/include/common.h"
 	hipify-perl -inplace -quiet-warnings hipify_rccl/graph/*
 	hipify-perl -inplace -quiet-warnings hipify_rccl/include/network/unpack/*

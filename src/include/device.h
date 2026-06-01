@@ -86,6 +86,10 @@ struct ncclDevRedOpFull {
   uint64_t scalarArg;
 };
 
+#ifdef __HIP_DEVICE_COMPILE__
+#include "device/rccl_ptr.h"
+#endif
+
 union ncclLLFifoLine {
   /* Flags have to be *after* data, because otherwise, an incomplete receive
     from the network may receive the flag but not the data.
@@ -99,6 +103,9 @@ union ncclLLFifoLine {
   };
   uint64_t v[2];
   int4 i4;
+#if defined(__HIP_DEVICE_COMPILE__) && RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS
+  v4u v4u;  /* same layout as data1,flag1,data2,flag2 for b128 load/store */
+#endif
 };
 
 #if __HIP_DEVICE_COMPILE__
