@@ -42,6 +42,7 @@ option(PROFILE                                 "Enable profiling"               
 option(TIMETRACE                               "Enable time-trace during compilation"          OFF)
 option(TRACE                                   "Enable additional tracing"                     OFF)
 option(FAULT_INJECTION                         "Enable fault injection"                        ON)
+option(DWORDX4_INTRINSICS                      "Turn off compilation with dwordx4 intrinsics"  ON)
 
 # Default GPU architectures to build
 #==================================================================================================
@@ -986,6 +987,11 @@ if(ENABLE_IB_NET_CHECKSUM)
 else()
   target_compile_definitions(rccl PRIVATE RCCL_IB_CHECKSUM_DEVICE_ENABLED=0)
   message(STATUS "RCCL IB/socket net checksum: DISABLED (RCCL_IB_CHECKSUM_DEVICE_ENABLED=0)")
+endif()
+
+if (NOT DWORDX4_INTRINSICS)
+  message(STATUS "Force disable dwordx4 intrinsics")
+  target_compile_definitions(rccl PRIVATE DWORDX4_INTRINSICS_FORCE_OFF)
 endif()
 
 # NPKit flags
