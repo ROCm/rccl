@@ -2743,13 +2743,21 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
       //
       // Skipped silently for the multi-recv tail (nreqs > 1, only the
       // last sub has a meaningful single-buffer checksum) and for slots
-      // the kernel marked NONE (LL/LL128/oversized). GDR (device-memory)
-      // sends are NOT skipped: they take the cudaMemcpy bounce path
-      // below so the CPU XOR sees the same bytes the HCA RDMA'd, just
-      // pulled back over PCIe in 64 KiB chunks. The kind probe uses the
-      // standard cudaPointerGetAttributes path that nccl already relies
-      // on in argcheck.cc, so the hipify pass converts it cleanly on
-      // AMD builds.
+      // the kernel marked NONE (LL/LL128/oversized). The recompute is
+      // always done IN PLACE: we XOR r->send.data directly through the
+      // same mapping the HCA RDMA-read, with no cudaMemcpy bounce and no
+      // cudaPointerGetAttributes probe. Two reasons:
+      //   1. No HIP/CUDA runtime call runs on the proxy completion path.
+      //      The old DtoH bounce could deadlock the proxy thread (the
+      //      reason send-verify was disabled in the field).
+      //   2. Reading the buffer the NIC actually transmitted, with no
+      //      intervening copy, is the most faithful check for the
+      //      gfx950 uncached-memory corruption this verify hunts -- a
+      //      DtoH bounce can pull the bytes back over a different,
+      //      coherent path and mask the bug. The send staging buffer the
+      //      proxy holds (r->send.data) is CPU-addressable on the targeted
+      //      platforms (host-staged, or GPU memory mapped to the host),
+      //      so the in-place dereference is valid here.
       if (r->type == NCCL_NET_IB_REQ_SEND
           && rcclParamIbRdmaChecksumSendVerify()
           && r->nreqs == 1
@@ -2760,98 +2768,22 @@ ncclResult_t ncclIbTest(void* request, int* done, int* sizes) {
         // prims_simple.h. r->send.checksum is the kernel's XOR over the
         // first `xorBytes` bytes of the slot, not over the full slot, so
         // the CPU recompute MUST stop at the same boundary or every
-        // capped slot would report a false mismatch -- and the GDR
-        // cudaMemcpy must also stop there or we'd pull 8x+ more bytes
-        // over PCIe than the verify actually consumes when e.g.
-        // RCCL_IB_RDMA_CHECKSUM_BYTES=4096 with a 32 KiB slot.
+        // capped slot would report a false mismatch.
         int const csumByteCap = (int)rcclParamIbRdmaChecksumBytes();
         int const xorBytes = (csumByteCap > 0 && r->send.size > csumByteCap)
                                ? csumByteCap : r->send.size;
-        cudaPointerAttributes attr;
-        cudaError_t cerr = cudaPointerGetAttributes(&attr, r->send.data);
-        // Field name follows the same hipify gate as src/misc/argcheck.cc:
-        // .memoryType on ROCm < 5.5, .type on ROCm >= 5.5 and on stock CUDA.
-#if defined(ROCM_VERSION) && ROCM_VERSION < 50500
-        bool isDevice = (cerr == cudaSuccess) && (attr.memoryType == cudaMemoryTypeDevice);
-#else
-        bool isDevice = (cerr == cudaSuccess) && (attr.type == cudaMemoryTypeDevice);
-#endif
-        uint32_t cpuCsum;
-        bool computed = false;
-        if (cerr != cudaSuccess) {
-          if (rcclParamIbRdmaChecksumTrace()) {
-            TRACE(NCCL_NET, "NET/IB: send csum verify skipped (cudaPointerGetAttributes failed): size=%d xor=%d", r->send.size, xorBytes);
-          }
-        } else if (!isDevice) {
-          // Host-staging (or managed) path: XOR the buffer in place.
-          cpuCsum = ncclIbQuickXorCsumHost(r->send.data, (size_t)xorBytes);
-          computed = true;
-        } else {
-          // GDR path: r->send.data lives in VRAM; CPU dereference is unsafe.
-          // Bounce through a stack-allocated host buffer so the XOR sees
-          // the same bytes the HCA RDMA'd. We only ever bounce `xorBytes`
-          // (== min(slot_size, RCCL_IB_RDMA_CHECKSUM_BYTES)), not the
-          // full slot, so the cap is honoured for PCIe bandwidth too --
-          // and the verify cost scales with the cap, not the slot size.
-          // We chunk by 64 KiB to keep peak working-set predictable and
-          // to fit inside the L2 of the CPU thread doing the XOR.
-          //
-          // Doing a cudaMemcpy from the proxy thread post-completion
-          // adds real per-step latency (extra PCIe DTH read). This
-          // branch is gated by RCCL_IB_RDMA_CHECKSUM_SEND_VERIFY
-          // (default 1); set it to 0 to disable when running
-          // bandwidth-sensitive GDR workloads, or set
-          // RCCL_IB_RDMA_CHECKSUM_BYTES to cap the per-step cost.
-          enum { kBounceBytes = 65536 };
-          static_assert((kBounceBytes & 3) == 0, "bounce must be word-aligned for XOR accumulator");
-          alignas(16) uint8_t bounce[kBounceBytes];
-          uint32_t acc = 0;
-          bool ok = true;
-          size_t off = 0;
-          while (off < (size_t)xorBytes) {
-            size_t chunk = (size_t)xorBytes - off;
-            if (chunk > kBounceBytes) chunk = kBounceBytes;
-            cudaError_t mc = cudaMemcpy(bounce, (const uint8_t*)r->send.data + off, chunk, cudaMemcpyDeviceToHost);
-            if (mc != cudaSuccess) {
-              if (rcclParamIbRdmaChecksumTrace()) {
-                TRACE(NCCL_NET, "NET/IB: send csum verify skipped (cudaMemcpy err=%d off=%zu chunk=%zu xor=%d size=%d)",
-                      (int)mc, off, chunk, xorBytes, r->send.size);
-              }
-              ok = false;
-              break;
-            }
-            bool isLast = (off + chunk == (size_t)xorBytes);
-            // XOR full 4-byte words; only the very last chunk's tail
-            // (< 4 bytes) is folded the same way ncclIbQuickXorCsumHost
-            // does it, so the streaming result equals the full-buffer
-            // result the kernel produced.
-            size_t i = 0;
-            for (; i + 4 <= chunk; i += 4) {
-              uint32_t w;
-              __builtin_memcpy(&w, bounce + i, sizeof(w));
-              acc ^= w;
-            }
-            if (isLast && i < chunk) {
-              uint32_t tail = 0;
-              __builtin_memcpy(&tail, bounce + i, chunk - i);
-              acc ^= tail;
-            }
-            off += chunk;
-          }
-          if (ok) {
-            cpuCsum = acc;
-            computed = true;
-          }
-        }
-        if (computed) {
-          if (cpuCsum != r->send.checksum) {
-            WARN("NET/IB: send csum mismatch (post-completion CPU verify, %s): size=%d xor=%d expected=0x%x cpu_recomputed=0x%x",
-                 isDevice ? "GDR-bounced" : "host-direct",
-                 r->send.size, xorBytes, r->send.checksum, cpuCsum);
-          } else if (rcclParamIbRdmaChecksumTrace()) {
-            TRACE(NCCL_NET, "NET/IB: send csum verify OK (%s) size=%d xor=%d csum=0x%x",
-                  isDevice ? "GDR-bounced" : "host-direct", r->send.size, xorBytes, cpuCsum);
-          }
+        // In-place XOR straight off the buffer the HCA just finished
+        // reading. No cudaPointerGetAttributes, no cudaMemcpy bounce, no
+        // staging buffer -- the proxy completion path stays free of HIP
+        // runtime calls (which is what previously hung), and we observe
+        // the exact bytes the NIC transmitted through their own mapping.
+        uint32_t cpuCsum = ncclIbQuickXorCsumHost(r->send.data, (size_t)xorBytes);
+        if (cpuCsum != r->send.checksum) {
+          WARN("NET/IB: send csum mismatch (post-completion CPU verify, in-place): size=%d xor=%d expected=0x%x cpu_recomputed=0x%x",
+               r->send.size, xorBytes, r->send.checksum, cpuCsum);
+        } else if (rcclParamIbRdmaChecksumTrace()) {
+          TRACE(NCCL_NET, "NET/IB: send csum verify OK (in-place) size=%d xor=%d csum=0x%x",
+                r->send.size, xorBytes, cpuCsum);
         }
       }
 #endif

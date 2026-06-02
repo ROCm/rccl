@@ -10,6 +10,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// x86 streaming-load (MOVNTDQA) intrinsics for the host-side XOR over the
+// uncached net buffers. Host-only: the __x86_64__ guard keeps the device
+// compilation pass (and non-x86 hosts) on the scalar fallback below.
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
+
 // Mirror the RCCL_IB_CHECKSUM_DEVICE_ENABLED gate from device.h. Both
 // places use the same #ifndef pattern so a CMake -D override hits them
 // identically (this header is included from host TUs that don't pull in
@@ -36,10 +43,60 @@ static inline uint32_t ncclIbImmFoldCsum(uint32_t csum) {
   return csum & NCCL_IB_IMM_CSUM_MASK;
 }
 
+// XOR-fold of the first `nbytes` of `data`, matching the kernel's 32-bit
+// word XOR (ncclQuickXorCsumWarp) so the send-side post-completion verify can
+// compare against r->send.checksum. The net send/recv buffers on gfx94x/gfx950
+// live in uncached (write-combining) host/device memory (hipHostMallocUncached
+// / hipDeviceMallocUncached), where a plain scalar load issues one slow
+// uncached transaction per word on the proxy critical path. On x86 we instead
+// use MOVNTDQA (_mm_stream_load_si128): a streaming load that aggregates WC
+// reads into the CPU's fill buffers, with four independent accumulators to
+// keep several buffers in flight. XOR is associative+commutative, so the
+// per-lane reduction of the 128-bit accumulators equals the sequential word
+// XOR regardless of grouping.
+#if defined(__x86_64__) || defined(__i386__)
+__attribute__((target("sse4.1")))
+#endif
 static inline uint32_t ncclIbQuickXorCsumHost(const void* data, size_t nbytes) {
   const uint8_t* bytes = (const uint8_t*)data;
   uint32_t csum = 0;
   size_t i = 0;
+#if defined(__x86_64__) || defined(__i386__)
+  uintptr_t addr = (uintptr_t)bytes;
+  // Only take the streaming path when the buffer is at least 4-byte aligned
+  // (so the 16-byte-alignment head stays on word boundaries) and large enough
+  // to amortize setup; otherwise fall through to the scalar loop for the whole
+  // buffer.
+  if ((addr & 3) == 0 && nbytes >= 64) {
+    // Scalar 4-byte words until the pointer is 16-byte aligned. With a 4-byte
+    // aligned base this head is exactly 0/4/8/12 bytes, so word boundaries
+    // (and thus the XOR result) are preserved.
+    size_t head = (size_t)((16 - (addr & 15)) & 15);
+    for (; i < head; i += 4) {
+      uint32_t w;
+      __builtin_memcpy(&w, bytes + i, sizeof(w));
+      csum ^= w;
+    }
+    __m128i a0 = _mm_setzero_si128(), a1 = _mm_setzero_si128();
+    __m128i a2 = _mm_setzero_si128(), a3 = _mm_setzero_si128();
+    for (; i + 64 <= nbytes; i += 64) {
+      a0 = _mm_xor_si128(a0, _mm_stream_load_si128((__m128i*)(bytes + i +  0)));
+      a1 = _mm_xor_si128(a1, _mm_stream_load_si128((__m128i*)(bytes + i + 16)));
+      a2 = _mm_xor_si128(a2, _mm_stream_load_si128((__m128i*)(bytes + i + 32)));
+      a3 = _mm_xor_si128(a3, _mm_stream_load_si128((__m128i*)(bytes + i + 48)));
+    }
+    for (; i + 16 <= nbytes; i += 16) {
+      a0 = _mm_xor_si128(a0, _mm_stream_load_si128((__m128i*)(bytes + i)));
+    }
+    __m128i acc = _mm_xor_si128(_mm_xor_si128(a0, a1), _mm_xor_si128(a2, a3));
+    uint32_t lanes[4];
+    _mm_storeu_si128((__m128i*)lanes, acc);
+    csum ^= lanes[0] ^ lanes[1] ^ lanes[2] ^ lanes[3];
+    // Streaming loads are weakly ordered; drain the fill buffers before the
+    // next completion reads (a possibly re-DMA'd) buffer through this path.
+    _mm_mfence();
+  }
+#endif
   for (; i + 4 <= nbytes; i += 4) {
     uint32_t w;
     __builtin_memcpy(&w, bytes + i, sizeof(w));

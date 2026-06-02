@@ -264,6 +264,16 @@ __device__ __attribute__((noinline)) inline uint32_t ncclQuickXorCsumWarp(int la
 // write mutated the buffer at any point during the passes, the last pass
 // disagrees with the wire value -> mismatch flagged.
 //
+// In addition to the wire compare, the passes are cross-checked against
+// EACH OTHER: `*iterFirst` returns the first pass's value and `*iterStable`
+// is cleared if ANY later pass disagrees with the first. A disagreement
+// across passes is a direct, wire-independent signal that the receive
+// buffer is still being mutated while the kernel reads it (a late DMA tail
+// write, a peer-incoherent store, the documented waitPeer race, ...) --
+// the caller flags that as its own mismatch class because the data the
+// consumer is about to read is provably unstable, regardless of whether
+// the last pass happened to land on the wire value.
+//
 // `__threadfence_system()` after the first iteration drains any in-flight
 // system-scope writes (e.g. late-arriving DMA from the IB HCA, peer-GPU
 // nontemporal stores) so passes 2..N can observe values that the first
@@ -277,14 +287,23 @@ __device__ __attribute__((noinline)) inline uint32_t ncclQuickXorCsumWarp(int la
 // shared body and a small live-range; unrolling 4 copies would balloon
 // VGPR usage by carrying 4 parallel `csum` chains and 4 parallel butterfly
 // reductions, hurting occupancy on the same kernels we're trying to
-// validate.
-__device__ inline uint32_t ncclQuickXorCsumWarpIters(int lane, const void* ptr, size_t bytes, int iters) {
-  uint32_t csum = ncclQuickXorCsumWarp(lane, ptr, bytes);
+// validate. Every pass returns a warp-uniform value (the trailing butterfly
+// reduce broadcasts it to all lanes), so `*iterFirst`/`*iterStable` are
+// warp-uniform too and the caller's per-lane branch on them never diverges.
+__device__ inline uint32_t ncclQuickXorCsumWarpIters(
+    int lane, const void* ptr, size_t bytes, int iters,
+    uint32_t* iterFirst = nullptr, bool* iterStable = nullptr) {
+  uint32_t first = ncclQuickXorCsumWarp(lane, ptr, bytes);
+  uint32_t csum = first;
+  bool stable = true;
   #pragma unroll 1
   for (int i = 1; i < iters; i++) {
     if (i == 1) __threadfence_system();
     csum = ncclQuickXorCsumWarp(lane, ptr, bytes);
+    if (csum != first) stable = false;
   }
+  if (iterFirst) *iterFirst = first;
+  if (iterStable) *iterStable = stable;
   return csum;
 }
 

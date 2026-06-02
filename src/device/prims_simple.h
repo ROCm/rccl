@@ -257,15 +257,23 @@ private:
         int       bytes = __shfl(myXorBytes, srcLane);
         int       doCsum = __shfl(myDoCsum, srcLane);
         uint32_t  expected = (uint32_t)__shfl((int)myExpected, srcLane);
+        uint32_t iterFirst = 0;
+        bool iterStable = true;
         uint32_t got = ncclQuickXorCsumWarpIters(
             lane,
             doCsum ? (const void*)(uintptr_t)ptrLL : nullptr,
             doCsum ? (size_t)bytes : 0,
-            ncclShmem.comm.netChecksumRecvIters);
+            ncclShmem.comm.netChecksumRecvIters,
+            &iterFirst, &iterStable);
         if (lane == srcLane && doCsum) {
           uint32_t expectedCsum = (expected >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
           uint32_t gotCsum = ncclQuickXorCsumFold12(got);
-          if (gotCsum != expectedCsum) {
+          if (!iterStable) {
+            printf("RCCL: net recv csum mismatch (iter-unstable) rank=%d ch=%d slot=%d bytes=%d iter0=0x%x iterN=0x%x expected=0x%x\n",
+              ncclShmem.comm.rank, blockIdx.x,
+              (int)((step - StepPerSlice) % NCCL_STEPS),
+              bytes, iterFirst, got, expectedCsum);
+          } else if (gotCsum != expectedCsum) {
             printf("RCCL: net recv csum mismatch rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
               ncclShmem.comm.rank, blockIdx.x,
               (int)((step - StepPerSlice) % NCCL_STEPS),
@@ -849,15 +857,23 @@ public:
             int       rbytes = __shfl(rXorBytes, rsrcLane);
             int       rdo    = __shfl(rDoCsum,  rsrcLane);
             uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+            uint32_t iterFirst = 0;
+            bool iterStable = true;
             uint32_t rgot = ncclQuickXorCsumWarpIters(
                 rlane,
                 rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
                 rdo ? (size_t)rbytes : 0,
-                ncclShmem.comm.netChecksumRecvIters);
+                ncclShmem.comm.netChecksumRecvIters,
+                &iterFirst, &iterStable);
             if (rlane == rsrcLane && rdo) {
               uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
               uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
-              if (gotCsum != expCsum) {
+              if (!iterStable) {
+                printf("RCCL: net recv csum mismatch (iter-unstable) rank=%d ch=%d slot=%d bytes=%d iter0=0x%x iterN=0x%x expected=0x%x\n",
+                  ncclShmem.comm.rank, blockIdx.x,
+                  (int)((step - StepPerSlice) % NCCL_STEPS),
+                  rbytes, iterFirst, rgot, expCsum);
+              } else if (gotCsum != expCsum) {
                 printf("RCCL: net recv csum mismatch rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
                   ncclShmem.comm.rank, blockIdx.x,
                   (int)((step - StepPerSlice) % NCCL_STEPS),
@@ -1591,15 +1607,23 @@ public:
           int       rbytes = __shfl(rXorBytes, rsrcLane);
           int       rdo    = __shfl(rDoCsum,  rsrcLane);
           uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+          uint32_t iterFirst = 0;
+          bool iterStable = true;
           uint32_t rgot = ncclQuickXorCsumWarpIters(
               rlane,
               rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
               rdo ? (size_t)rbytes : 0,
-              ncclShmem.comm.netChecksumRecvIters);
+              ncclShmem.comm.netChecksumRecvIters,
+              &iterFirst, &iterStable);
           if (rlane == rsrcLane && rdo) {
             uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
             uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
-            if (gotCsum != expCsum) {
+            if (!iterStable) {
+              printf("RCCL: net recv csum mismatch (patReduce iter-unstable) rank=%d ch=%d slot=%d bytes=%d iter0=0x%x iterN=0x%x expected=0x%x\n",
+                ncclShmem.comm.rank, blockIdx.x,
+                (int)(step % NCCL_STEPS),
+                rbytes, iterFirst, rgot, expCsum);
+            } else if (gotCsum != expCsum) {
               printf("RCCL: net recv csum mismatch (patReduce) rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
                 ncclShmem.comm.rank, blockIdx.x,
                 (int)(step % NCCL_STEPS),
@@ -1771,15 +1795,23 @@ public:
           int       rbytes = __shfl(rXorBytes, rsrcLane);
           int       rdo    = __shfl(rDoCsum,  rsrcLane);
           uint32_t  rexp   = (uint32_t)__shfl((int)myExpected, rsrcLane);
+          uint32_t iterFirst = 0;
+          bool iterStable = true;
           uint32_t rgot = ncclQuickXorCsumWarpIters(
               rlane,
               rdo ? (const void*)(uintptr_t)rptrLL : nullptr,
               rdo ? (size_t)rbytes : 0,
-              ncclShmem.comm.netChecksumRecvIters);
+              ncclShmem.comm.netChecksumRecvIters,
+              &iterFirst, &iterStable);
           if (rlane == rsrcLane && rdo) {
             uint32_t expCsum = (rexp >> NCCL_IB_IMM_SIZE_BITS) & NCCL_IB_IMM_CSUM_MASK;
             uint32_t gotCsum = ncclQuickXorCsumFold12(rgot);
-            if (gotCsum != expCsum) {
+            if (!iterStable) {
+              printf("RCCL: net recv csum mismatch (patCopy iter-unstable) rank=%d ch=%d slot=%d bytes=%d iter0=0x%x iterN=0x%x expected=0x%x\n",
+                ncclShmem.comm.rank, blockIdx.x,
+                (int)((step + ps->stepOffset) % NCCL_STEPS),
+                rbytes, iterFirst, rgot, expCsum);
+            } else if (gotCsum != expCsum) {
               printf("RCCL: net recv csum mismatch (patCopy) rank=%d ch=%d slot=%d bytes=%d expected=0x%x got=0x%x raw=0x%x\n",
                 ncclShmem.comm.rank, blockIdx.x,
                 (int)((step + ps->stepOffset) % NCCL_STEPS),
