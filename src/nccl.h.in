@@ -915,7 +915,7 @@ ncclResult_t pmscclLoadAlgo(const char *mscclAlgoFilePath, mscclAlgoHandle_t *ms
     @param[in]  sendBuff         Data array to send
     @param[in]  sendCounts       Array containing number of elements to send to each participating rank
     @param[in]  sDisPls          Array of offsets into *sendbuff* for each participating rank
-    @param[out] recvBuff         Data array to receive
+    @param[in,out] recvBuff      Data array to receive
     @param[in]  recvCounts       Array containing number of elements to receive from each participating rank
     @param[in]  rDisPls          Array of offsets into *recvbuff* for each participating rank
     @param[in]  count            Number of elements
