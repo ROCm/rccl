@@ -154,7 +154,7 @@ NCCL_PARAM(RocmIbEceEnable,"IB_ECE_ENABLE",1);
 NCCL_PARAM(RocmIbDataDirect,"IB_DATA_DIRECT",1);
 NCCL_PARAM(RocmIbQpsPerConn, "IB_QPS_PER_CONNECTION", 1);
 RCCL_PARAM(RocmIbQpsPerP2p, "IB_QPS_PER_P2P", 0);
-NCCL_PARAM(RocmIbGdrFlushDisable, "GDR_FLUSH_DISABLE", 0);
+NCCL_PARAM(RocmIbGdrFlushDisable, "GDR_FLUSH_DISABLE", 1);
 
 // AMD AINIC
 RCCL_PARAM(CtsInlineData, "CTS_INLINE_DATA", -1);
@@ -828,7 +828,7 @@ ncclResult_t rocmIbInit(ncclDebugLogger_t logFunction, ncclProfilerCallback_t pr
       // for AINIC IbUseInline is enabled by default always
       ncclIbUseInline = true;
       // for AINIC GDR flush is disabled by default
-      ncclIbGdrFlushDisable = 1;
+      // ncclIbGdrFlushDisable = 1;
 
       INFO(NCCL_INIT|NCCL_NET, "NET/IB : AINIC RoCEv2 optimizations enabled: CTS Inline Data: %s; CTS Offload: %s; "
            "IB Use Inline: enabled; GDR Flush: disabled", rcclCtsInlineData ? "Enabled": "Disabled",
@@ -1380,7 +1380,7 @@ ncclResult_t ncclIbCreateQp(uint8_t ib_port, struct ncclIbNetCommDevBase* base,
   if (rcclCtsInlineData) {
     qpInitAttr.cap.max_inline_data = MAX_INLINE_DATA_SIZE;
   } else {
-    qpInitAttr.cap.max_inline_data = ncclIbUseInline ? sizeof(struct ncclIbSendFifo) : 0;
+    qpInitAttr.cap.max_inline_data = ncclIbUseInline ? sizeof(struct ncclIbSendFifoCtsInline)*NCCL_NET_IB_MAX_RECVS : 0;
   }
   NCCLCHECK(wrap_ibv_create_qp(&qp->qp, base->pd, &qpInitAttr));
   if (rcclAinicRoce) {
@@ -2248,14 +2248,101 @@ ncclResult_t rocmIbDeregMr(void* comm, void* mhandle) {
 
 NCCL_PARAM(RocmIbSplitDataOnQps, "IB_SPLIT_DATA_ON_QPS", 0);
 
+// CTS FIFO stride-aware access helpers.
+// When rcclCtsInlineData is true the receiver writes 32B ncclIbSendFifoCtsInline
+// elements; otherwise it writes 64B ncclIbSendFifo elements.  The sender must
+// index into the correct array with the correct stride.
+
+// Return a volatile pointer to the r-th element within the FIFO row for |slot|.
+// When CTS-inline is active the base comes from fifo_inline (32B stride),
+// otherwise from fifo (64B stride).  The returned pointer is cast to
+// ncclIbSendFifo* so callers compile, but field reads MUST go through the
+// accessors below when rcclCtsInlineData is true.
+static inline volatile struct ncclIbSendFifo* ctsFifoSlot(
+    struct ncclIbSendComm* comm, int slot, int r) {
+  if (rcclCtsInlineData)
+    return (volatile struct ncclIbSendFifo*)&comm->fifo_inline[slot][r];
+  return &comm->fifo[slot][r];
+}
+
+// Field accessors – read from the correct layout.
+static inline uint64_t ctsFifoAddr(volatile struct ncclIbSendFifo* p) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->addr;
+  }
+  return p->addr;
+}
+
+static inline uint32_t ctsFifoRkey(volatile struct ncclIbSendFifo* p, int devIdx) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->rkeys[0]; // inline struct only has rkeys[1]
+  }
+  return p->rkeys[devIdx];
+}
+
+static inline int ctsFifoSize(volatile struct ncclIbSendFifo* p) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->size;
+  }
+  return (int)p->size;
+}
+
+static inline uint32_t ctsFifoNreqs(volatile struct ncclIbSendFifo* p) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->nreqs;
+  }
+  return p->nreqs;
+}
+
+static inline uint16_t ctsFifoTag(volatile struct ncclIbSendFifo* p) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->tag;
+  }
+  return (uint16_t)p->tag;
+}
+
+static inline uint64_t ctsFifoIdx(volatile struct ncclIbSendFifo* p) {
+  if (rcclCtsInlineData) {
+    volatile struct ncclIbSendFifoCtsInline* pi = (volatile struct ncclIbSendFifoCtsInline*)p;
+    return pi->idx;
+  }
+  return p->idx;
+}
+
+// Byte offset of |slot| row into the remote FIFO region.
+static inline uint64_t ctsFifoSlotOffset(int slot) {
+  if (rcclCtsInlineData)
+    return (uint64_t)slot * NCCL_NET_IB_MAX_RECVS * sizeof(struct ncclIbSendFifoCtsInline);
+  return (uint64_t)slot * NCCL_NET_IB_MAX_RECVS * sizeof(struct ncclIbSendFifo);
+}
+
+// Byte length for posting |n| FIFO elements.
+static inline size_t ctsFifoPostLen(int n) {
+  if (rcclCtsInlineData)
+    return n * sizeof(struct ncclIbSendFifoCtsInline);
+  return n * sizeof(struct ncclIbSendFifo);
+}
+
+// Byte size to clear for the first element of a FIFO row.
+static inline size_t ctsFifoClearSize(void) {
+  if (rcclCtsInlineData)
+    return sizeof(struct ncclIbSendFifoCtsInline);
+  return sizeof(struct ncclIbSendFifo);
+}
+
 ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot, bool use_write_op) {
   struct ncclIbRequest** reqs = comm->fifoReqs[slot];
-  volatile struct ncclIbSendFifo* slots = comm->fifo[slot];
+  volatile struct ncclIbSendFifo* slot0 = ctsFifoSlot(comm, slot, 0);
   int nreqs;
   if (rcclCtsOffloadEnabled) {
     nreqs = 1;
   } else {
-    nreqs = slots[0].nreqs;
+    nreqs = ctsFifoNreqs(slot0);
   }
   if (nreqs > NCCL_NET_IB_MAX_RECVS) return ncclInternalError;
 
@@ -2271,7 +2358,7 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot, bool use_wri
     if (rcclCtsOffloadEnabled) {
       wr->wr.rdma.remote_addr = 0xdeadbeef;
     } else {
-      wr->wr.rdma.remote_addr = slots[r].addr;
+      wr->wr.rdma.remote_addr = ctsFifoAddr(ctsFifoSlot(comm, slot, r));
     }
     wr->next = wr + 1;
     wr_id += (reqs[r] - comm->base.reqs) << (r*8);
@@ -2329,7 +2416,7 @@ ncclResult_t ncclIbMultiSend(struct ncclIbSendComm* comm, int slot, bool use_wri
       if (rcclCtsOffloadEnabled) {
         comm->wrs[r].wr.rdma.rkey = 0xbade;
       } else {
-        comm->wrs[r].wr.rdma.rkey = slots[r].rkeys[qp->remDevIdx];
+        comm->wrs[r].wr.rdma.rkey = ctsFifoRkey(ctsFifoSlot(comm, slot, r), qp->remDevIdx);
       }
 
       int chunkSize = DIVUP(DIVUP(reqs[r]->send.size, nqps), align) * align;
@@ -2411,7 +2498,6 @@ ncclResult_t rocmIbIsend(void* sendComm, void* data, size_t size, int tag, void*
 
   // Wait for the receiver to have posted the corresponding receive
   int nreqs = 0;
-  volatile struct ncclIbSendFifo* slots;
 
   if (rcclCtsOffloadEnabled) {
       nreqs = 1;
@@ -2420,26 +2506,27 @@ ncclResult_t rocmIbIsend(void* sendComm, void* data, size_t size, int tag, void*
   int slot = (comm->fifoHead) % MAX_REQUESTS;
   struct ncclIbRequest** reqs = comm->fifoReqs[slot];
   if (!rcclCtsOffloadEnabled) {
-    slots = comm->fifo[slot];
+    volatile struct ncclIbSendFifo* slot0 = ctsFifoSlot(comm, slot, 0);
     uint64_t idx = comm->fifoHead+1;
-    if (slots[0].idx != idx) { *request = NULL; return ncclSuccess; }
-    nreqs = slots[0].nreqs;
+    if (ctsFifoIdx(slot0) != idx) { *request = NULL; return ncclSuccess; }
+    nreqs = ctsFifoNreqs(slot0);
     // Wait until all data has arrived
-    for (int r=1; r<nreqs; r++) while(slots[r].idx != idx);
+    for (int r=1; r<nreqs; r++) while(ctsFifoIdx(ctsFifoSlot(comm, slot, r)) != idx);
     __sync_synchronize(); // order the nreqsPtr load against tag/rkey/addr loads below
   }
   for (int r=0; r<nreqs; r++) {
     if (!rcclCtsOffloadEnabled) {
-      if (reqs[r] != NULL || slots[r].tag != tag) continue;
+      volatile struct ncclIbSendFifo* slotR = ctsFifoSlot(comm, slot, r);
+      if (reqs[r] != NULL || ctsFifoTag(slotR) != tag) continue;
 
-      if (size > slots[r].size) size = slots[r].size;
+      if (size > (size_t)ctsFifoSize(slotR)) size = ctsFifoSize(slotR);
       // Sanity checks
-      if (slots[r].size < 0 || slots[r].addr == 0 || slots[r].rkeys[0] == 0) {
+      if (ctsFifoSize(slotR) < 0 || ctsFifoAddr(slotR) == 0 || ctsFifoRkey(slotR, 0) == 0) {
         char line[SOCKET_NAME_MAXLEN + 1];
         union ncclSocketAddress addr;
         ncclSocketGetAddr(&comm->base.sock, &addr);
-        WARN("NET/IB : req %d/%d tag %x peer %s posted incorrect receive info: size %ld addr %lx rkeys[0]=%x",
-             r, nreqs, tag, ncclSocketToString(&addr, line), slots[r].size, slots[r].addr, slots[r].rkeys[0]);
+        WARN("NET/IB : req %d/%d tag %x peer %s posted incorrect receive info: size %d addr %lx rkeys[0]=%x",
+             r, nreqs, tag, ncclSocketToString(&addr, line), ctsFifoSize(slotR), ctsFifoAddr(slotR), ctsFifoRkey(slotR, 0));
         return ncclInternalError;
       }
     } else{
@@ -2491,7 +2578,7 @@ ncclResult_t rocmIbIsend(void* sendComm, void* data, size_t size, int tag, void*
 
     // Clear slots[0]->nreqs, as well as other fields to help debugging and sanity checks
     if (!rcclCtsOffloadEnabled) {
-      memset((void*)slots, 0, sizeof(struct ncclIbSendFifo));
+      memset((void*)ctsFifoSlot(comm, slot, 0), 0, ctsFifoClearSize());
     }
     memset(reqs, 0, NCCL_NET_IB_MAX_RECVS*sizeof(struct ncclIbRequest*));
     comm->fifoHead++;
@@ -2536,9 +2623,8 @@ ncclResult_t rocmIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, siz
     if (rcclCtsInlineData) {
       localElemCtsInline[i].addr = (uint64_t)data[i];
 
-      // Send all applicable rkeys
-      for (int j = 0; j < comm->base.vProps.ndevs; j++)
-        localElemCtsInline[i].rkeys[j] = mhandleWrapper->mrs[j]->rkey;
+      // Inline struct only has rkeys[1] - store first rkey only
+      localElemCtsInline[i].rkeys[0] = mhandleWrapper->mrs[0]->rkey;
 
       localElemCtsInline[i].nreqs = n;
       localElemCtsInline[i].size = sizes[i]; // Sanity/Debugging
@@ -2560,18 +2646,14 @@ ncclResult_t rocmIbPostFifo(struct ncclIbRecvComm* comm, int n, void** data, siz
       localElemRef = (uint64_t)localElem;
     }
   }
-  wr.wr.rdma.remote_addr = comm->remFifo.addr + slot*NCCL_NET_IB_MAX_RECVS*sizeof(struct ncclIbSendFifo);
+  wr.wr.rdma.remote_addr = comm->remFifo.addr + ctsFifoSlotOffset(slot);
 
   // Lookup the correct fifoRkey
   wr.wr.rdma.rkey = comm->base.remDevs[ctsQp->remDevIdx].fifoRkey;
 
   // Set the correct sge properties
   comm->devs[ctsQp->devIndex].fifoSge.addr   = localElemRef;
-  if (rcclCtsInlineData) {
-    comm->devs[ctsQp->devIndex].fifoSge.length = MAX_INLINE_DATA_SIZE;
-  } else {
-    comm->devs[ctsQp->devIndex].fifoSge.length = n*sizeof(struct ncclIbSendFifo);
-  }
+  comm->devs[ctsQp->devIndex].fifoSge.length = ctsFifoPostLen(n);
   wr.sg_list = &comm->devs[ctsQp->devIndex].fifoSge;
   wr.num_sge = 1;
 
