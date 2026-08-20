@@ -103,7 +103,9 @@ void rcclUpdateCollectiveProtocol(struct ncclComm* comm, size_t const& nBytes, s
     // Change LL protocol threshold
     info->protocol = NCCL_PROTO_LL;
   } else if (!userProtocolInput && IsArchMatch(comm->topo->nodes[GPU].nodes[0].gpu.gcn, "gfx12") && comm->nNodes == 1){
-    info->protocol = rcclGetProtoForGfx12( info->func,sizePerRank);
+    // LL protocol lacks the gfx12 memory-ordering fixes present in Simple (see #5480); force Simple
+    // until prims_ll.h gets the same gfx12 atomic-ordering treatment as prims_simple.h.
+    info->protocol = NCCL_PROTO_SIMPLE;
   } else if(!userProtocolInput && comm->nNodes >= 2 && (info->func == ncclFuncReduceScatter || info->func == ncclFuncAllGather || info->func == ncclFuncAllReduce || info->func == ncclFuncBroadcast || info->func == ncclFuncReduce)) {
     auto tunableIndex = rcclGetTunableIndex(info->func);
     auto llMin = comm->minMaxLLRange[tunableIndex][NCCL_PROTO_LL][RCCL_PROTOCOL_MIN_IDX];
