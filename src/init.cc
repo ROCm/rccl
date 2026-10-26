@@ -513,6 +513,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
       CUDACHECK(cudaEventDestroy(comm->sharedRes->launchEvent));
       CUDACHECK(cudaEventDestroy(comm->sharedRes->scratchEvent));
       NCCLCHECK(ncclProxyDestroy(comm));
+      pthread_mutex_destroy(&comm->sharedRes->proxyOpsLock);
       free(comm->sharedRes);
     }
   }
@@ -730,6 +731,7 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
     NCCLCHECK(ncclStrongStreamConstruct(&sharedRes->hostStream));
     CUDACHECK(cudaEventCreateWithFlags(&sharedRes->launchEvent, cudaEventDisableTiming));
     CUDACHECK(cudaEventCreateWithFlags(&sharedRes->scratchEvent, cudaEventDisableTiming));
+    pthread_mutex_init(&sharedRes->proxyOpsLock, nullptr);
     comm->sharedRes = sharedRes;
     sharedRes->refCount = 1;
   } else {

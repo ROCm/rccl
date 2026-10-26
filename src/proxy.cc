@@ -1016,6 +1016,19 @@ ncclResult_t ncclProxyStart(struct ncclComm* comm) {
   return ncclSuccess;
 }
 
+void ncclProxyOpsLock(struct ncclComm* comm) {
+  if (pthread_mutex_trylock(&comm->sharedRes->proxyOpsLock) == 0) return;
+  // Another thread is uploading for this communicator: logged at the 1st, 2nd, 4th, 8th... wait.
+  static uint64_t waits = 0;
+  uint64_t n = __atomic_add_fetch(&waits, 1, __ATOMIC_RELAXED);
+  if ((n & (n - 1)) == 0) INFO(NCCL_PROXY, "Proxy op upload waited for another thread (%lu so far)", (unsigned long)n);
+  pthread_mutex_lock(&comm->sharedRes->proxyOpsLock);
+}
+
+void ncclProxyOpsUnlock(struct ncclComm* comm) {
+  pthread_mutex_unlock(&comm->sharedRes->proxyOpsLock);
+}
+
 static ncclResult_t ncclProxyProgressCreate(struct ncclProxyState* proxyState) {
   struct ncclProxyProgressState* state = &proxyState->progressState;
   if (!state->thread) {

@@ -9,6 +9,10 @@ Full documentation for RCCL is available at [https://rccl.readthedocs.io](https:
 * RCCL error messages have been made more verbose in several cases. RCCL now prints out fatal error messages by default. Fatal error messages can be suppressed by setting `NCCL_DEBUG=NONE`.
 * Disabled `reduceCopyPacks` pipelining for `gfx950`.
 
+### Resolved Issues
+
+* Fixed `Proxy append out of bounds` (then `ncclInternalError`) when a non-captured collective is launched while a graph launch using the same communicator is outstanding, and every collective has proxy operations, such as with a profiler plugin that enables kernel channel events (`ncclProfileKernelCh`). The launching thread and the graph's host callback could both upload proxy operations at once; uploads are now serialized.
+
 ## Unreleased - RCCL 2.27.7 for ROCm 7.1.1
 
 ### Changed
