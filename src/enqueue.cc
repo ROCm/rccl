@@ -1497,8 +1497,13 @@ static ncclResult_t hostStreamPlanTask(struct ncclComm* comm, struct ncclKernelP
   NCCLCHECK(ncclProfilerStartGroupEvent(plan));
   NCCLCHECK(ncclProfilerStartTaskEvents(plan));
   if (ncclIntruQueueHead(&plan->proxyOpQueue)) {
-    NCCLCHECK(uploadProxyOps(comm, plan));
-    NCCLCHECK(ncclProxyStart(comm));
+    // A graph's plans get here from a host callback, which can run while the launching thread uploads a
+    // non-captured plan: the proxy op lists and op counters both write are not thread-safe.
+    ncclProxyOpsLock(comm);
+    ncclResult_t ret = uploadProxyOps(comm, plan);
+    if (ret == ncclSuccess) ret = ncclProxyStart(comm);
+    ncclProxyOpsUnlock(comm);
+    NCCLCHECK(ret);
   }
   NCCLCHECK(ncclProfilerStopTaskEvents(plan));
   NCCLCHECK(ncclProfilerStopGroupEvent(plan));

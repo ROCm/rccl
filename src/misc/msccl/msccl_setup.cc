@@ -173,11 +173,20 @@ static ncclResult_t mscclSetupProxyImpl(struct mscclAlgo* hostAlgo, ncclComm_t c
   return ncclSuccess;
 }
 
+// A graph's MSCCL proxy ops are uploaded from a host callback, which can run while the launching thread uploads
+// others for the same communicator.
+static ncclResult_t mscclSetupProxyLocked(struct mscclAlgo* hostAlgo, ncclComm_t comm) {
+  ncclProxyOpsLock(comm);
+  ncclResult_t ret = mscclSetupProxyImpl(hostAlgo, comm);
+  ncclProxyOpsUnlock(comm);
+  return ret;
+}
+
 static void HIPRT_CB mscclSetupProxyCallback(void *args) {
   std::vector<struct mscclProxyArg>* params = (std::vector<struct mscclProxyArg>*)args;
   INFO(NCCL_NET,"mscclSetupProxyCallback: proxy args size: %ld\n", params->size());
   for (auto &p : *params) {
-    mscclSetupProxyImpl(p.hostAlgo, p.comm);
+    mscclSetupProxyLocked(p.hostAlgo, p.comm);
   }
 }
 
@@ -191,7 +200,7 @@ ncclResult_t mscclSetupProxy(struct mscclAlgo* hostAlgo, ncclComm_t comm, hipStr
   }
   if (threadLocalStatus.captureStatus == mscclNoCapture) {
     INFO(NCCL_NET,"mscclSetupProxy: no capture\n");
-    NCCLCHECK(mscclSetupProxyImpl(hostAlgo, comm));
+    NCCLCHECK(mscclSetupProxyLocked(hostAlgo, comm));
   } else if (status.needsProxy) {
     INFO(NCCL_NET,"mscclSetupProxy: capture\n");
     if (savedProxyArgs[threadLocalStatus.captureId].size() == 0) {

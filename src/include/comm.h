@@ -146,6 +146,9 @@ struct ncclSharedResources {
 
   /* proxy related shared res */
   struct ncclProxyState* proxyState;
+  // Serializes uploads of proxy ops. A graph uploads its plans' ops from a host callback, which can run while the
+  // launching thread uploads a non-captured plan's: with graph mixing disabled, nothing else orders the two.
+  pthread_mutex_t proxyOpsLock;
 };
 
 struct ncclChannel {
